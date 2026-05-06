@@ -339,7 +339,7 @@ export function Dashboard() {
         {/* Left section: App Name & Mobile menu */}
         <div className="flex items-center gap-3 md:gap-4 flex-shrink-0">
           <button 
-             className="md:hidden p-1.5 text-[#787b86] hover:text-white rounded border border-[#2a2e39] bg-[#1e222d]"
+             className="lg:hidden p-1.5 text-[#787b86] hover:text-white rounded border border-[#2a2e39] bg-[#1e222d]"
              onClick={() => setShowRightSidebar(true)}
           >
              <Menu className="w-5 h-5" />
@@ -350,7 +350,7 @@ export function Dashboard() {
         </div>
 
         {/* Middle section: Desktop Search & Timeframe */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden lg:flex items-center gap-2">
           <div className="flex items-center gap-2 bg-[#1e222d] px-2 py-1 rounded">
             <Search className="w-4 h-4 text-[#787b86]" />
             <input 
@@ -464,7 +464,7 @@ export function Dashboard() {
           <button onClick={() => setShowSettings(true)} className="p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Settings">
             <Settings className="w-5 h-5 md:w-4 md:h-4" />
           </button>
-          <button onClick={() => setShowRightSidebar(!showRightSidebar)} className="hidden md:flex p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Toggle Sidebar">
+          <button onClick={() => setShowRightSidebar(!showRightSidebar)} className="hidden lg:flex p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Toggle Sidebar">
             {showRightSidebar ? <X className="w-5 h-5 md:w-4 md:h-4" /> : <Menu className="w-5 h-5 md:w-4 md:h-4" />}
           </button>
           <button onClick={logout} className="p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Log Out">
@@ -474,7 +474,7 @@ export function Dashboard() {
       </header>
 
       {/* Mobile Sub-Header: Search & Interval */}
-      <div className="md:hidden flex items-center justify-between px-3 py-2 bg-[#131722] border-b border-[#2a2e39] shrink-0 z-20">
+      <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#131722] border-b border-[#2a2e39] shrink-0 z-20">
          <div className="flex items-center gap-1.5 bg-[#1e222d] px-2 py-1.5 rounded flex-1 mr-3 border border-[#2a2e39]">
             <Search className="w-3.5 h-3.5 text-[#787b86]" />
             <input 
