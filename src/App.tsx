@@ -6,6 +6,9 @@
 import { AuthProvider, useAuth } from './components/AuthProvider';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
+import axios from 'axios';
+
+axios.defaults.withCredentials = true;
 
 function AppContent() {
   const { user, loading } = useAuth();

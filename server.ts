@@ -4,7 +4,8 @@ import path from 'path';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import crypto from 'crypto';
@@ -12,7 +13,7 @@ import { analyzeElliottWaves } from './ewEngine.js';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key_here';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'your_secret_key_here';
 const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
 // In a real scenario, use signature for secret. For simple public data, we just use public API mostly if we only read.
 // We don't necessarily need API key to read public Binance data (e.g. klines)
@@ -54,7 +55,7 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Try connecting to MongoDB. If no URI, we just mock for this preview safely
+  // Try connecting to MongoDB. If no URI, we will error out on DB endpoints
   if (process.env.MONGO_URI) {
     try {
       await mongoose.connect(process.env.MONGO_URI);
@@ -71,21 +72,60 @@ async function startServer() {
       console.error('MongoDB connection error:', err);
     }
   } else {
-    console.warn('WARNING: MONGO_URI is not set. Database features will error or mock.');
+    console.warn('WARNING: MONGO_URI is not set. Database features will error out.');
   }
 
-  // Middleware to verify JWT
-  const authMiddleware = (req: any, res: any, next: any) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-    const token = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-      next();
-    } catch (err) {
-      res.status(401).json({ error: 'Invalid token' });
+  app.set('trust proxy', 1);
+
+  // Session Setup
+  app.use(
+    session({
+      secret: SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      store: process.env.MONGO_URI 
+         ? MongoStore.create({ mongoUrl: process.env.MONGO_URI }) 
+         : new session.MemoryStore(),
+      cookie: {
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production' && !process.env.APP_URL?.includes('localhost'),
+        sameSite: 'lax'
+      }
+    })
+  );
+
+  // Extend Express typical Request to have session with userId
+  declare module 'express-session' {
+    interface SessionData {
+      userId: string;
+      role?: string;
+      email?: string;
     }
+  }
+
+  // Middleware to verify session
+  const authMiddleware = async (req: any, res: any, next: any) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    // Set user from session info directly for faster checks, or fetch from DB if strict
+    // For performance, we trust session data, or we can fetch fresh data:
+    if (process.env.MONGO_URI && req.session.userId !== '1' && req.session.userId !== '2') {
+        try {
+            const user = await User.findById(req.session.userId);
+            if (!user) {
+              return res.status(401).json({ error: 'User not found in db' });
+            }
+            req.user = user;
+        } catch(err) {
+            return res.status(500).json({ error: 'Error fetching user' });
+        }
+    } else {
+        req.user = { _id: req.session.userId, role: req.session.role, email: req.session.email };
+    }
+    next();
   };
 
   const adminMiddleware = (req: any, res: any, next: any) => {
@@ -100,17 +140,9 @@ async function startServer() {
   // Auth
   app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
-    // VERY Basic Mock if no DB:
+    
     if (!process.env.MONGO_URI) {
-       if (email === 'admin@admin.com' && password === 'admin123') {
-           const token = jwt.sign({ id: '1', role: 'admin', email }, JWT_SECRET, { expiresIn: '1d' });
-           return res.json({ token, user: { email, role: 'admin' } });
-       }
-       if (email === 'user@user.com' && password === 'user123') {
-           const token = jwt.sign({ id: '2', role: 'user', email }, JWT_SECRET, { expiresIn: '1d' });
-           return res.json({ token, user: { email, role: 'user' } });
-       }
-       return res.status(401).json({ error: 'Invalid credentials. (Try admin@admin.com/admin123 or user@user.com/user123 if no DB)' });
+       return res.status(500).json({ error: 'Database is not configured. Please set MONGO_URI in environment.' });
     }
 
     try {
@@ -118,8 +150,12 @@ async function startServer() {
       if (!user) return res.status(400).json({ error: 'User not found' });
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
-      const token = jwt.sign({ id: user._id, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '1d' });
-      res.json({ token, user: { email: user.email, role: user.role } });
+      
+      req.session.userId = user._id.toString();
+      req.session.role = user.role;
+      req.session.email = user.email;
+
+      res.json({ user: { email: user.email, role: user.role } });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -135,6 +171,14 @@ async function startServer() {
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+      if (err) return res.status(500).json({ error: 'Could not log out' });
+      res.clearCookie('connect.sid');
+      res.json({ success: true });
+    });
   });
 
   // User Management
@@ -211,8 +255,7 @@ async function startServer() {
     }
     
     if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_SECRET_KEY) {
-      console.warn("Placing mock trade because Binance API keys are missing in ENV.");
-      return res.json({ success: true, message: 'Mock trade executed (No Binance Keys configured)', data: req.body });
+      return res.status(500).json({ error: 'Binance API keys are missing in environment configuration. Cannot place real trades.' });
     }
     
     const { symbol, side, amount, leverage, takeProfit, stopLoss } = req.body;
@@ -344,20 +387,7 @@ async function startServer() {
   // Get Recent Analysis
   app.get('/api/analysis', authMiddleware, async (req, res) => {
     if (!process.env.MONGO_URI) {
-      return res.json([
-        {
-          _id: 'mock123',
-          symbol: 'BTCUSDT',
-          timeframe: '1d',
-          analysisText: '(Mock Data) BTC is currently completing Wave 4 correction. Expecting a bounce to start Wave 5 impulse towards 75,000 area. Watch the 0.382 retracement support.',
-          entryPoint: 62000,
-          exitPoint: 75000,
-          stopLoss: 58000,
-          trend: 'bullish',
-          wavePoints: [],
-          timestamp: new Date()
-        }
-      ]);
+      return res.status(500).json({ error: 'Database is not configured' });
     }
     
     try {

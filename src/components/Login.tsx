@@ -23,10 +23,10 @@ export function Login() {
         await axios.post('/api/auth/register', { email, password });
         // Automatically login after register
         const res = await axios.post('/api/auth/login', { email, password });
-        login(res.data.token, res.data.user);
+        login(res.data.user);
       } else {
         const res = await axios.post('/api/auth/login', { email, password });
-        login(res.data.token, res.data.user);
+        login(res.data.user);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || (isRegister ? 'Registration failed' : 'Login failed'));

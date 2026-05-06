@@ -127,7 +127,7 @@ export function Dashboard() {
         await tx2.wait();
         
         // Auto upgrade role on backend
-        await axios.post('/api/users/upgrade-pro', {}, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        await axios.post('/api/users/upgrade-pro', {});
         alert("Subscribed successfully! Returning to app, please refresh to load Pro features.");
         // We could refresh user state here or reload
         window.location.reload();
@@ -216,7 +216,7 @@ export function Dashboard() {
         symbol,
         interval,
         data: chartData.slice(-50) // backend only needs a snapshot for LLM/math
-      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      });
       const newAnalysis = analysisRes.data;
       setAnalyses([newAnalysis, ...analyses]);
       setActiveAnalysis(newAnalysis);
@@ -237,7 +237,7 @@ export function Dashboard() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('/api/users', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const res = await axios.get('/api/users');
       setUsersList(res.data);
     } catch(err) {
       console.error(err);
@@ -246,7 +246,7 @@ export function Dashboard() {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      await axios.put(`/api/users/${userId}`, { role: newRole }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      await axios.put(`/api/users/${userId}`, { role: newRole });
       fetchUsers();
     } catch(err: any) {
       alert('Failed to update user: ' + (err.response?.data?.error || err.message));
@@ -303,7 +303,7 @@ export function Dashboard() {
         leverage: tradeLeverage,
         takeProfit: tradeTP,
         stopLoss: tradeSL
-      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      });
       alert(res.data.message);
       setOpenTrades(prev => [{
         id: Date.now().toString(),
