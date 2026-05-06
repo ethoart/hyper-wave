@@ -13,6 +13,15 @@ import { analyzeElliottWaves } from './ewEngine.js';
 
 dotenv.config();
 
+// Extend Express typical Request to have session with userId
+declare module 'express-session' {
+  interface SessionData {
+    userId: string;
+    role?: string;
+    email?: string;
+  }
+}
+
 const SESSION_SECRET = process.env.SESSION_SECRET || 'your_secret_key_here';
 const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
 // In a real scenario, use signature for secret. For simple public data, we just use public API mostly if we only read.
@@ -77,15 +86,25 @@ async function startServer() {
 
   app.set('trust proxy', 1);
 
+  let sessionStore;
+  if (process.env.MONGO_URI) {
+      try {
+          sessionStore = MongoStore.create({ mongoUrl: process.env.MONGO_URI });
+      } catch (err) {
+          console.error("Failed to initialize MongoStore. Defaulting to MemoryStore.", err);
+          sessionStore = new session.MemoryStore();
+      }
+  } else {
+      sessionStore = new session.MemoryStore();
+  }
+
   // Session Setup
   app.use(
     session({
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
-      store: process.env.MONGO_URI 
-         ? MongoStore.create({ mongoUrl: process.env.MONGO_URI }) 
-         : new session.MemoryStore(),
+      store: sessionStore,
       cookie: {
         maxAge: 24 * 60 * 60 * 1000, // 1 day
         httpOnly: true,
@@ -94,15 +113,6 @@ async function startServer() {
       }
     })
   );
-
-  // Extend Express typical Request to have session with userId
-  declare module 'express-session' {
-    interface SessionData {
-      userId: string;
-      role?: string;
-      email?: string;
-    }
-  }
 
   // Middleware to verify session
   const authMiddleware = async (req: any, res: any, next: any) => {
@@ -114,7 +124,7 @@ async function startServer() {
     // For performance, we trust session data, or we can fetch fresh data:
     if (process.env.MONGO_URI && req.session.userId !== '1' && req.session.userId !== '2') {
         try {
-            const user = await User.findById(req.session.userId);
+            const user = await (User as any).findById(req.session.userId);
             if (!user) {
               return res.status(401).json({ error: 'User not found in db' });
             }
@@ -297,7 +307,7 @@ async function startServer() {
   app.post('/api/users/upgrade-pro', authMiddleware, async (req: any, res) => {
     try {
       // Security warning: In production, verify on-chain transaction logs rather than allowing open endpoints
-      await User.findByIdAndUpdate(req.user.userId, { role: 'pro' });
+      await (User as any).findByIdAndUpdate(req.user._id, { role: 'pro' });
       res.json({ success: true, message: 'Role upgraded to PRO' });
     } catch (err) {
       res.status(500).json({ error: 'Failed to upgrade role' });

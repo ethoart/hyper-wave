@@ -50,12 +50,7 @@ export function Login() {
         <CardHeader className="p-6 pb-4 border-b border-[#1a1a1a]">
           <CardTitle className="text-[18px] text-[#fff] font-medium m-0">{isRegister ? 'Register New User' : 'System Authentication'}</CardTitle>
           <CardDescription className="text-[#888] text-[13px] mt-2 leading-[1.6]">
-            {isRegister ? 'Create an account to access the framework.' : 'Secure connection to analysis framework.'}<br/>
-            <span className="text-[#555] mt-2 block">
-              <span className="text-[#10b981]">Demo mode active:</span><br/>
-              admin@admin.com / admin123<br/>
-              user@user.com / user123
-            </span>
+            {isRegister ? 'Create an account to access the framework.' : 'Secure connection to analysis framework.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 pt-6">
