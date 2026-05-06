@@ -102,29 +102,71 @@ export function Dashboard() {
     try {
         // @ts-ignore
         const provider = new ethers.BrowserProvider(window.ethereum);
+
+        const network = await provider.getNetwork();
+        if (network.chainId !== 8453n && network.chainId !== BigInt(8453)) {
+            try {
+                // @ts-ignore
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0x2105' }], // 8453 in Hex
+                });
+            } catch (switchError: any) {
+                if (switchError.code === 4902) {
+                    throw new Error("Base network is not added to your wallet. Please add it manually.");
+                }
+                throw new Error("Please switch your wallet network to Base Mainnet (Chain ID 8453).");
+            }
+        }
+
         const signer = await provider.getSigner();
         
         // Example Subscription Contract Address on Base
-        const contractAddress = import.meta.env.VITE_PRO_CONTRACT_ADDRESS || "0xYourContractAddressHere";
+        let contractAddress = import.meta.env.VITE_PRO_CONTRACT_ADDRESS || "";
         const usdcAddress = import.meta.env.VITE_USDC_ADDRESS || "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base USDC Address
         
-        const erc20Abi = [
-            "function approve(address spender, uint256 amount) public returns (bool)"
-        ];
-        const subAbi = [
-            "function subscribe(uint256 months) external"
-        ];
-        
-        const tokenContract = new ethers.Contract(usdcAddress, erc20Abi, signer);
-        const subContract = new ethers.Contract(contractAddress, subAbi, signer);
-        
-        // Approve 5 USDC (6 decimals)
-        const amt = ethers.parseUnits("5", 6);
-        const tx1 = await tokenContract.approve(contractAddress, amt);
-        await tx1.wait();
-        
-        const tx2 = await subContract.subscribe(1);
-        await tx2.wait();
+        if (!contractAddress || contractAddress === "0xYourContractAddressHere") {
+            // Provide a graceful fallback to a known address if none provided
+            alert("No PRO receiver address configured. Using a default test address for demonstration.");
+            contractAddress = "0x000000000000000000000000000000000000dEaD";
+        }
+
+        if (!ethers.isAddress(contractAddress)) {
+            throw new Error(`Invalid receiver address configured: ${contractAddress}`);
+        }
+
+        const amt = ethers.parseUnits("5", 6); // 5 USDC (6 decimals)
+        const code = await provider.getCode(contractAddress);
+
+        // NATIVE BALANCE CHECK FIRST TO PREVENT GAS ESTIMATION CRASHES
+        const erc20BalanceAbi = ["function balanceOf(address owner) view returns (uint256)"];
+        const balanceContract = new ethers.Contract(usdcAddress, erc20BalanceAbi, provider);
+        const currentBalance = await balanceContract.balanceOf(walletAddress);
+        if (currentBalance < amt) {
+            throw new Error(`Insufficient USDC balance. You need at least 5 USDC, but you have ${ethers.formatUnits(currentBalance, 6)} USDC.`);
+        }
+
+        if (code === "0x") {
+            // If the configured address is a WALLET (EOA), just send USDC directly.
+            const erc20TransferAbi = ["function transfer(address to, uint256 amount) public returns (bool)"];
+            const tokenContract = new ethers.Contract(usdcAddress, erc20TransferAbi, signer);
+            
+            const tx = await tokenContract.transfer(contractAddress, amt);
+            await tx.wait();
+        } else {
+            // If the configured address is a SMART CONTRACT, do approve + subscribe.
+            const erc20Abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
+            const subAbi = ["function subscribe(uint256 months) external"];
+            
+            const tokenContract = new ethers.Contract(usdcAddress, erc20Abi, signer);
+            const subContract = new ethers.Contract(contractAddress, subAbi, signer);
+            
+            const tx1 = await tokenContract.approve(contractAddress, amt);
+            await tx1.wait();
+            
+            const tx2 = await subContract.subscribe(1);
+            await tx2.wait();
+        }
         
         // Auto upgrade role on backend
         await axios.post('/api/users/upgrade-pro', {});
@@ -133,7 +175,14 @@ export function Dashboard() {
         window.location.reload();
     } catch (err: any) {
         console.error(err);
-        alert("Transaction failed: " + err.message);
+        
+        let msg = err.message;
+        if (msg.includes("value.hash") || msg.includes("UNPREDICTABLE_GAS_LIMIT")) {
+            msg = "Transaction failed to simulate. This usually means you don't have enough USDC on the current network, or you are on the wrong network. Ensure you have 5 USDC and native gas tokens.";
+        } else if (msg.includes("user rejected")) {
+            msg = "Transaction rejected by user.";
+        }
+        alert("Transaction failed: " + msg);
     }
     setBuyingPro(false);
   };
