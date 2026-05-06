@@ -18,7 +18,7 @@ export function Dashboard() {
   
   const [symbolInput, setSymbolInput] = useState('BTCUSDT');
   const [symbol, setSymbol] = useState('BTCUSDT');
-  const [interval, setInterval] = useState('1d');
+  const [interval, setChartInterval] = useState('1d');
   
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades'>('watchlist');
@@ -233,7 +233,7 @@ export function Dashboard() {
         // If we want to initially load the first active analysis
         // setActiveAnalysis(res.data[0]);
         // setSymbol(res.data[0].symbol);
-        // setInterval(res.data[0].timeframe);
+        // setChartInterval(res.data[0].timeframe);
       }
     } catch (err) {
       console.error(err);
@@ -371,7 +371,7 @@ export function Dashboard() {
     setActiveAnalysis(item);
     if (symbol !== item.symbol || interval !== item.timeframe) {
       setSymbol(item.symbol || 'BTCUSDT');
-      setInterval(item.timeframe || '1d');
+      setChartInterval(item.timeframe || '1d');
       setSymbolInput(item.symbol || 'BTCUSDT');
     } else if (item.chartData) {
       // Just swap to active immediately
@@ -418,7 +418,7 @@ export function Dashboard() {
              {['15m', '1h', '4h', '1d', '1w'].map(tf => (
                <button 
                  key={tf}
-                 onClick={() => setInterval(tf)}
+                 onClick={() => setChartInterval(tf)}
                  className={`px-2 py-1 text-sm rounded transition-colors ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:bg-[#2a2e39]'}`}
                >
                  {tf}
@@ -540,7 +540,7 @@ export function Dashboard() {
              {['15m', '1h', '4h', '1d', '1w'].map(tf => (
                <button 
                  key={tf}
-                 onClick={() => setInterval(tf)}
+                 onClick={() => setChartInterval(tf)}
                  className={`px-2.5 py-1.5 text-xs rounded font-medium ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] active:bg-[#2a2e39]'}`}
                >
                  {tf}
