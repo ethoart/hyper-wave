@@ -36,6 +36,9 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Frontend Variables (must start with VITE_)
 VITE_PRO_CONTRACT_ADDRESS=your_deployed_smart_contract_address
 VITE_USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 # Base USDC address
+
+# Optional VPS / Cloudflare Hosting variables
+TUNNEL_TOKEN=your_cloudflare_zero_trust_tunnel_token
 ```
 
 ---
@@ -123,8 +126,14 @@ If you prefer full control over a Linux server, you can host both the app and th
    pm2 startup
    ```
 
-5. Reverse Proxy (Nginx):
-   * Install Nginx and proxy traffic from port `80/443` to `http://localhost:3000`.
+5. Reverse Proxy (Nginx) OR Cloudflare Tunnel:
+   * **Nginx Option**: Install Nginx and proxy traffic from port `80/443` to `http://localhost:3000`.
+   * **Cloudflare Tunnel Option**: If using Cloudflare Zero Trust instead of exposing ports:
+      1. Go to your Cloudflare Dashboard -> Zero Trust -> Networks -> Tunnels
+      2. Click "Create a tunnel" -> Select "Cloudflared"
+      3. Give it a name and select your Operating System (Debian/Ubuntu) and run the provided command (contains your tunnel token).
+      4. Note: You can also specify the token in your `.env` as `TUNNEL_TOKEN=your_token_here` if your local PM2 wrapper runs the tunnel.
+      5. Route a public hostname (e.g. `hyperwave.yourdomain.com`) to `http://localhost:3000`.
 
 ---
 
