@@ -64,10 +64,15 @@ async function startServer() {
 
   app.use(express.json());
 
+  let isDbConnected = false;
+
   // Try connecting to MongoDB. If no URI, we will error out on DB endpoints
   if (process.env.MONGO_URI) {
     try {
-      await mongoose.connect(process.env.MONGO_URI);
+      await mongoose.connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 5000, // Fail faster if we can't connect
+      });
+      isDbConnected = true;
       console.log('Connected to MongoDB');
       
       // Auto-create a super admin if none exists
@@ -79,8 +84,16 @@ async function startServer() {
         await User.create({ email: superAdminEmail, password: hashedPassword, role: 'admin' });
         console.log(`Created super admin: ${superAdminEmail}`);
       }
-    } catch (err) {
-      console.error('MongoDB connection error:', err);
+    } catch (err: any) {
+      console.error('MongoDB connection error:', err.message);
+      if (err.message.includes('buffering timed out') || err.message.includes('timeout') || err.message.includes('ECONNREFUSED')) {
+         console.error('======================================================================');
+         console.error('CRITICAL: Mongoose could not connect to your MongoDB cluster.');
+         console.error('If you are using MongoDB Atlas, this usually means your IP address');
+         console.error('is not whitelisted. Go to Atlas Security -> Network Access and');
+         console.error('add 0.0.0.0/0 (allow access from anywhere) to connect from this app.');
+         console.error('======================================================================');
+      }
     }
   } else {
     console.warn('WARNING: MONGO_URI is not set. Database features will error out.');
@@ -153,8 +166,18 @@ async function startServer() {
   app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
     
-    if (!process.env.MONGO_URI) {
-       return res.status(500).json({ error: 'Database is not configured. Please set MONGO_URI in environment.' });
+    // Super admin fallback if MongoDB is not connected
+    if (!isDbConnected) {
+       const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'admin@admin.com';
+       const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'admin123';
+       if (email === superAdminEmail && password === superAdminPassword) {
+          req.session.userId = 'fallback-super-admin-id';
+          req.session.role = 'admin';
+          req.session.email = email;
+          console.warn('MongoDB not connected: Using fallback super admin login.');
+          return res.json({ user: { email, role: 'admin', message: 'Logged in using fallback memory mode' } });
+       }
+       return res.status(500).json({ error: 'Database is not connected. If you have MONGO_URI set, ensure MongoDB is running.' });
     }
 
     try {
@@ -175,7 +198,7 @@ async function startServer() {
 
   app.post('/api/auth/register', async (req, res) => {
     const { email, password, role } = req.body;
-    if (!process.env.MONGO_URI) return res.status(500).json({error: 'No DB configured'});
+    if (!isDbConnected) return res.status(500).json({error: 'Database is not connected. User registration is disabled.'});
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
       const user = await User.create({ email, password: hashedPassword, role: role || 'user' });
@@ -196,6 +219,7 @@ async function startServer() {
   // User Management
   app.get('/api/users', authMiddleware, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    if (!isDbConnected) return res.json([]);
     try {
        const users = await (User as any).find({}, { password: 0 }); // Exclude passwords
        res.json(users);
@@ -206,6 +230,7 @@ async function startServer() {
 
   app.put('/api/users/:id', authMiddleware, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    if (!isDbConnected) return res.status(500).json({ error: 'Database is not connected.' });
     try {
        const { role } = req.body;
        await (User as any).findByIdAndUpdate(req.params.id, { role });
@@ -307,6 +332,9 @@ async function startServer() {
   });
 
   app.post('/api/users/upgrade-pro', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) {
+       return res.status(500).json({ error: 'Database is not connected. Upgrade is disabled in memory mode.' });
+    }
     try {
       // Security warning: In production, verify on-chain transaction logs rather than allowing open endpoints
       await (User as any).findByIdAndUpdate(req.user._id, { role: 'pro' });
@@ -373,7 +401,7 @@ async function startServer() {
       const text = aiResponse.text?.trim() || "{}";
       const result = JSON.parse(text);
 
-      if (process.env.MONGO_URI) {
+      if (isDbConnected) {
         const newAnalysis = await Analysis.create({
           symbol,
           timeframe: interval,
@@ -387,19 +415,19 @@ async function startServer() {
         });
         res.json(newAnalysis);
       } else {
-        res.json({ ...result, symbol, timeframe: interval, timestamp: new Date() });
+        res.json({ _id: 'fake-id-' + Date.now(), ...result, symbol, timeframe: interval, timestamp: new Date() });
       }
 
     } catch (err: any) {
-      console.error('AI Gen error:', err);
-      res.status(500).json({ error: 'Failed to generate analysis' });
+      console.error('AI Gen error:', err.message || err);
+      res.status(500).json({ error: 'Failed to generate analysis', details: err.message });
     }
   });
 
   // Get Recent Analysis
   app.get('/api/analysis', authMiddleware, async (req, res) => {
-    if (!process.env.MONGO_URI) {
-      return res.status(500).json({ error: 'Database is not configured' });
+    if (!isDbConnected) {
+      return res.json([]);
     }
     
     try {

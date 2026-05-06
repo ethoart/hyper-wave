@@ -370,9 +370,9 @@ export function Dashboard() {
   const selectAnalysis = (item: any) => {
     setActiveAnalysis(item);
     if (symbol !== item.symbol || interval !== item.timeframe) {
-      setSymbol(item.symbol);
-      setInterval(item.timeframe);
-      setSymbolInput(item.symbol);
+      setSymbol(item.symbol || 'BTCUSDT');
+      setInterval(item.timeframe || '1d');
+      setSymbolInput(item.symbol || 'BTCUSDT');
     } else if (item.chartData) {
       // Just swap to active immediately
       // Actually we are always showing the live chartData instead of the saved one for better UX,
