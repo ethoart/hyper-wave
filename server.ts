@@ -71,11 +71,13 @@ async function startServer() {
       console.log('Connected to MongoDB');
       
       // Auto-create a super admin if none exists
-      const adminExists = await (User as any).findOne({ role: 'admin' });
+      const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'admin@admin.com';
+      const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'admin123';
+      const adminExists = await (User as any).findOne({ email: superAdminEmail });
       if (!adminExists) {
-        const hashedPassword = await bcrypt.hash('admin123', 10);
-        await User.create({ email: 'admin@admin.com', password: hashedPassword, role: 'admin' });
-        console.log('Created default admin: admin@admin.com / admin123');
+        const hashedPassword = await bcrypt.hash(superAdminPassword, 10);
+        await User.create({ email: superAdminEmail, password: hashedPassword, role: 'admin' });
+        console.log(`Created super admin: ${superAdminEmail}`);
       }
     } catch (err) {
       console.error('MongoDB connection error:', err);
