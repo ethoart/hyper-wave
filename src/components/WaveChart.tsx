@@ -96,6 +96,11 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       borderVisible: false,
       wickUpColor: '#089981',
       wickDownColor: '#f23645',
+      priceFormat: {
+        type: 'price',
+        precision: 4,
+        minMove: 0.0001,
+      }
     });
     candlestickSeries.setData(formattedData);
     candlestickSeriesRef.current = candlestickSeries;
