@@ -198,7 +198,8 @@ export function Dashboard() {
 
     // Setup Binance WebSocket for live candles
     if (wsRef.current) wsRef.current.close();
-    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`;
+    const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
+    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -243,11 +244,12 @@ export function Dashboard() {
   const fetchChartData = async () => {
     setLoadingConfig(true);
     try {
-      const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${interval}&limit=500`);
+      const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
+      const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=500`);
       setChartData(res.data);
       
       // Clear active analysis if it doesn't match symbol/interval
-      if (activeAnalysis && (activeAnalysis.symbol !== symbol || activeAnalysis.timeframe !== interval)) {
+      if (activeAnalysis && (activeAnalysis.symbol !== symbol || activeAnalysis.timeframe !== safeInterval)) {
         setActiveAnalysis(null);
       }
     } catch (err) {
@@ -260,10 +262,11 @@ export function Dashboard() {
     if (!user || (user.role !== 'admin' && user.role !== 'pro')) return;
     setGenerating(true);
     try {
+      const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
       // Pass it to backend to analyze
       const analysisRes = await axios.post('/api/analysis/generate', {
         symbol,
-        interval,
+        interval: safeInterval,
         data: chartData.slice(-50) // backend only needs a snapshot for LLM/math
       });
       const newAnalysis = analysisRes.data;
@@ -369,9 +372,14 @@ export function Dashboard() {
 
   const selectAnalysis = (item: any) => {
     setActiveAnalysis(item);
-    if (symbol !== item.symbol || interval !== item.timeframe) {
+    let newInterval = item.timeframe;
+    if (!newInterval || newInterval === 'undefined') {
+       newInterval = '1d';
+    }
+    
+    if (symbol !== item.symbol || interval !== newInterval) {
       setSymbol(item.symbol || 'BTCUSDT');
-      setChartInterval(item.timeframe || '1d');
+      setChartInterval(newInterval);
       setSymbolInput(item.symbol || 'BTCUSDT');
     } else if (item.chartData) {
       // Just swap to active immediately

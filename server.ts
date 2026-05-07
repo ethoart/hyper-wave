@@ -246,7 +246,8 @@ async function startServer() {
 
   // Binance & Analysis Data
   app.get('/api/market/klines', async (req: any, res) => {
-    const { symbol = 'BTCUSDT', interval = '1d', limit = '100' } = req.query;
+    let { symbol = 'BTCUSDT', interval = '1d', limit = '100' } = req.query;
+    if (interval === 'undefined') interval = '1d';
     try {
       // Free public endpoint
       const url = `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
