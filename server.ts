@@ -299,7 +299,9 @@ async function startServer() {
     const { symbol, side, amount, leverage, takeProfit, stopLoss } = req.body;
     const apiKey = process.env.BINANCE_API_KEY;
     const apiSecret = process.env.BINANCE_SECRET_KEY;
-    const baseEndpoint = 'https://fapi.binance.com';
+    // Support Binance Testnet for demo accounts
+    const isTestnet = process.env.BINANCE_TESTNET !== 'false';
+    const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
     const recvWindow = 5000;
 
     const getSignature = (queryString: string) => crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
@@ -392,7 +394,7 @@ async function startServer() {
       `;
 
       const aiResponse = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
+        model: 'gemini-2.5-pro',
         contents: prompt,
         config: {
             responseMimeType: "application/json"

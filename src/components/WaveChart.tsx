@@ -212,11 +212,11 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
     return () => {
       clearTimeout(syncTimeout);
-      chart.remove();
+      try { chart.remove(); } catch(e) {}
       chartRef.current = null;
       candlestickSeriesRef.current = null;
       userSeriesRef.current = null;
-      if (rsiChart) rsiChart.remove();
+      try { if (rsiChart) rsiChart.remove(); } catch(e) {}
     };
   }, [data, entryPoint, exitPoint, stopLoss, wavePoints, trend, showRSI, showSMA, showBB]);
 
