@@ -170,6 +170,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     let rsiChart: IChartApi | null = null;
     let rsiSeries: ISeriesApi<"Line"> | any = null;
 
+    let syncTimeout: any;
     if (showRSI && rsiContainerRef.current) {
       rsiChart = createChart(rsiContainerRef.current, {
         autoSize: true,
@@ -193,20 +194,28 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
       // Sync Logical Range
       chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (!chartRef.current) return; // Prevent updating if unmounted/disposed
         if (range && rsiChart) {
-          rsiChart.timeScale().setVisibleLogicalRange(range);
+          try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
         }
       });
       
       // Initial sync
-      setTimeout(() => {
-          const mainRange = chart.timeScale().getVisibleLogicalRange();
-          if (mainRange && rsiChart) rsiChart.timeScale().setVisibleLogicalRange(mainRange);
+      syncTimeout = setTimeout(() => {
+          if (!chartRef.current) return; // Disposed
+          try {
+            const mainRange = chart.timeScale().getVisibleLogicalRange();
+            if (mainRange && rsiChart) rsiChart.timeScale().setVisibleLogicalRange(mainRange);
+          } catch(e) {}
       }, 50);
     }
 
     return () => {
+      clearTimeout(syncTimeout);
       chart.remove();
+      chartRef.current = null;
+      candlestickSeriesRef.current = null;
+      userSeriesRef.current = null;
       if (rsiChart) rsiChart.remove();
     };
   }, [data, entryPoint, exitPoint, stopLoss, wavePoints, trend, showRSI, showSMA, showBB]);
