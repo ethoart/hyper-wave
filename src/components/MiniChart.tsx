@@ -14,7 +14,7 @@ export function MiniChart({ symbol, interval, activeTool, onClose }: { symbol: s
         const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
         const res = await axios.get(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${safeInterval}&limit=200`);
         const formatted = res.data.map((d: any) => ({
-          time: d[0] / 1000,
+          time: d[0],
           open: parseFloat(d[1]),
           high: parseFloat(d[2]),
           low: parseFloat(d[3]),

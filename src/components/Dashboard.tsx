@@ -199,7 +199,7 @@ export function Dashboard() {
     // Setup Binance WebSocket for live candles
     if (wsRef.current) wsRef.current.close();
     const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
-    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+    const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 

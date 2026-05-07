@@ -354,6 +354,10 @@ async function startServer() {
     }
     const { symbol, interval, data } = req.body;
     
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ error: 'Chart data is required for analysis.' });
+    }
+
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
     }
@@ -401,8 +405,19 @@ async function startServer() {
         }
       });
       
-      const text = aiResponse.text?.trim() || "{}";
-      const result = JSON.parse(text);
+      let text = aiResponse.text?.trim() || "{}";
+      text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      if (text.startsWith('```')) {
+          text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+      }
+      
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseErr) {
+        console.error("Failed to parse Gemini output:", text);
+        return res.status(500).json({ error: 'Failed to parse AI response. Try again.', details: text });
+      }
 
       if (isDbConnected) {
         const newAnalysis = await Analysis.create({
