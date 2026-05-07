@@ -206,7 +206,7 @@ export function Dashboard() {
     let reconnectAttempts = 0;
     
     const connectWs = () => {
-      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -215,7 +215,7 @@ export function Dashboard() {
         if (message.e === 'kline') {
           const kline = message.k;
           const liveCandle = {
-            time: kline.t,
+            time: Math.floor(kline.t / 1000),
             open: parseFloat(kline.o),
             high: parseFloat(kline.h),
             low: parseFloat(kline.l),
@@ -680,7 +680,7 @@ plot(close)"
                    <div className="text-xs uppercase text-[#787b86] font-semibold mb-2 flex items-center gap-1">
                       <Activity className="w-3 h-3" /> System Output
                    </div>
-                   <div className="leading-relaxed text-[#d1d4dc]">
+                   <div className="leading-relaxed text-[#d1d4dc] whitespace-pre-wrap">
                       {activeAnalysis.analysisText}
                    </div>
                 </div>

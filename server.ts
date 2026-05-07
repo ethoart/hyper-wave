@@ -359,7 +359,7 @@ async function startServer() {
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+      console.warn('GEMINI_API_KEY not configured, falling back to Math Engine');
     }
 
     try {
@@ -368,7 +368,13 @@ async function startServer() {
       const mathOutputText = algoResult 
         ? `Algorithmic Math Engine found a ${algoResult.trend} Wave 4 setup. 
            Calculated Entry Point: ${algoResult.entry}, Target: ${algoResult.target}, Invalidation Stop Loss: ${algoResult.stopLoss}. 
-           Pivots Found: Start=${algoResult.waves.start}, W1=${algoResult.waves.w1}, W2=${algoResult.waves.w2}, W3=${algoResult.waves.w3}, W4=${algoResult.waves.w4}.`
+           Pivots Found: 
+           Start={time: ${algoResult.waves.start.time}, price: ${algoResult.waves.start.price}}, 
+           W1={time: ${algoResult.waves.w1.time}, price: ${algoResult.waves.w1.price}}, 
+           W2={time: ${algoResult.waves.w2.time}, price: ${algoResult.waves.w2.price}}, 
+           W3={time: ${algoResult.waves.w3.time}, price: ${algoResult.waves.w3.price}}, 
+           W4={time: ${algoResult.waves.w4.time}, price: ${algoResult.waves.w4.price}}.
+           Reasoning: ${algoResult.reasoning}`
         : `Algorithmic Math Engine did not find a strict 100% textbook 5-wave structure matching constraints. Please provide a best-effort structural analysis based on patterns.`;
 
       let result;
@@ -390,7 +396,7 @@ async function startServer() {
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
           {
-            "analysisText": "Your expert synthesis: How does the raw data support the engine's finding? What's the final trade rationale?",
+            "analysisText": "Your expert synthesis: How does the raw data support the engine's finding? What's the final trade rationale? EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
             "winRate": "<percentage>%",
             "entryPoint": <number>,
             "exitPoint": <number>,
@@ -420,7 +426,7 @@ async function startServer() {
         
         result = {
           analysisText: algoResult 
-            ? "AI generation unavailable. Showing pure algorithmic math engine output. A valid setup was detected."
+            ? `AI generation unavailable. Showing pure algorithmic math engine output:\n\n${algoResult.reasoning}`
             : "AI generation unavailable. Algorithmic engine did not find a strict setup.",
           winRate: algoResult ? "70%" : "N/A",
           entryPoint: algoResult?.entry || data[data.length - 1].close,
@@ -428,11 +434,11 @@ async function startServer() {
           stopLoss: algoResult?.stopLoss || data[data.length - 1].close * 0.95,
           trend: algoResult?.trend || (data[data.length - 1].close > data[Math.max(0, data.length - 5)].close ? 'bullish' : 'bearish'),
           wavePoints: algoResult ? [
-            { time: data[0].time, price: algoResult.waves.start },
-            { time: data[Math.floor(data.length * 0.2)].time, price: algoResult.waves.w1 },
-            { time: data[Math.floor(data.length * 0.4)].time, price: algoResult.waves.w2 },
-            { time: data[Math.floor(data.length * 0.6)].time, price: algoResult.waves.w3 },
-            { time: data[Math.floor(data.length * 0.8)].time, price: algoResult.waves.w4 }
+            { time: algoResult.waves.start.time, price: algoResult.waves.start.price },
+            { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price },
+            { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price },
+            { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price },
+            { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price }
           ] : []
         };
       }
@@ -454,9 +460,9 @@ async function startServer() {
         res.json({ _id: 'fake-id-' + Date.now(), ...result, symbol, timeframe: interval, timestamp: new Date() });
       }
 
-    } catch (err: any) {
-      console.error('AI Gen error:', err.message || err);
-      res.status(500).json({ error: 'Failed to generate analysis', details: err.message });
+      } catch (err: any) {
+      console.error('AI Gen error trace:', err);
+      res.status(500).json({ error: 'Failed to generate analysis', details: err.message, stack: err.stack });
     }
   });
 

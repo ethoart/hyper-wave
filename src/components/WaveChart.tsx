@@ -30,14 +30,25 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
   useEffect(() => {
     if (liveCandle && chartRef.current && candlestickSeriesRef.current) {
+        // liveCandle.time implies it's already properly formatted in Dashboard OR it's a number we should just use.
+        // Dashboard does: Math.floor(kline.t / 1000)
+        let timeVal = liveCandle.time;
+        if (timeVal > 1e11) {
+            timeVal = Math.floor(timeVal / 1000); 
+        }
+
         const formattedLiveCandle = {
-            time: Math.floor(new Date(liveCandle.time).getTime() / 1000) as any,
+            time: timeVal as any,
             open: liveCandle.open,
             high: liveCandle.high,
             low: liveCandle.low,
             close: liveCandle.close,
         };
-        candlestickSeriesRef.current.update(formattedLiveCandle);
+        try {
+            candlestickSeriesRef.current.update(formattedLiveCandle);
+        } catch(e) {
+            // ignore out of order errors
+        }
     }
   }, [liveCandle]);
 
@@ -143,10 +154,13 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       // Filter out points that are outside the domain or invalid
       const validPoints = wavePoints
         .filter(p => p && p.time && p.price)
-        .map(p => ({
-            time: Math.floor(new Date(p.time!).getTime() / 1000) as any,
-            value: p.price!
-        }))
+        .map(p => {
+            let timeVal = p.time!;
+            if (typeof timeVal === 'string' || (typeof timeVal === 'number' && timeVal > 1e11)) {
+              timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+            }
+            return { time: timeVal as any, value: Number(p.price!) };
+        })
         .sort((a, b) => a.time - b.time);
       
       if (validPoints.length > 0) waveSeries.setData(validPoints);

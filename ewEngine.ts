@@ -98,14 +98,22 @@ export function analyzeElliottWaves(data: Kline[]) {
         highestScore = score;
         const target1 = w4 + len1;
         const target2 = w4 + 0.618 * (w3 - start);
+        const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
         bestSetup = {
           score,
           trend: 'bullish',
-          waves: { start, w1, w2, w3, w4 },
+          waves: { 
+            start: { price: p0.price, time: p0.time }, 
+            w1: { price: p1.price, time: p1.time }, 
+            w2: { price: p2.price, time: p2.time }, 
+            w3: { price: p3.price, time: p3.time }, 
+            w4: { price: p4.price, time: p4.time } 
+          },
           entry: w4,
           stopLoss: w1, // Invalidation line
-          target: parseFloat(((target1 + target2) / 2).toFixed(4))
+          target: finalTarget,
+          reasoning: `Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
@@ -140,14 +148,22 @@ export function analyzeElliottWaves(data: Kline[]) {
         highestScore = score;
         const target1 = w4 - len1;
         const target2 = w4 - 0.618 * (start - w3);
+        const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
         bestSetup = {
           score,
           trend: 'bearish',
-          waves: { start, w1, w2, w3, w4 },
+          waves: { 
+            start: { price: p0.price, time: p0.time }, 
+            w1: { price: p1.price, time: p1.time }, 
+            w2: { price: p2.price, time: p2.time }, 
+            w3: { price: p3.price, time: p3.time }, 
+            w4: { price: p4.price, time: p4.time } 
+          },
           entry: w4,
           stopLoss: w1,
-          target: parseFloat(((target1 + target2) / 2).toFixed(4))
+          target: finalTarget,
+          reasoning: `Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
