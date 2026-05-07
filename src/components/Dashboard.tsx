@@ -197,29 +197,48 @@ export function Dashboard() {
     fetchChartData();
 
     // Setup Binance WebSocket for live candles
-    if (wsRef.current) wsRef.current.close();
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+    }
     const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
-    const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    
+    let reconnectAttempts = 0;
+    
+    const connectWs = () => {
+      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.e === 'kline') {
-        const kline = message.k;
-        const liveCandle = {
-          time: kline.t,
-          open: parseFloat(kline.o),
-          high: parseFloat(kline.h),
-          low: parseFloat(kline.l),
-          close: parseFloat(kline.c),
-          volume: parseFloat(kline.v),
-        };
-        // We'll pass this via a ref or state. Let's use a ref or state.
-        // Actually lightweight charts needs updates. Let's create a state for it.
-        setLiveCandle(liveCandle);
-      }
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.e === 'kline') {
+          const kline = message.k;
+          const liveCandle = {
+            time: kline.t,
+            open: parseFloat(kline.o),
+            high: parseFloat(kline.h),
+            low: parseFloat(kline.l),
+            close: parseFloat(kline.c),
+            volume: parseFloat(kline.v),
+          };
+          setLiveCandle(liveCandle);
+        }
+      };
+
+      ws.onclose = () => {
+        if (reconnectAttempts < 5) {
+          reconnectAttempts++;
+          setTimeout(connectWs, 2000 * reconnectAttempts);
+        }
+      };
+
+      ws.onerror = (err) => {
+         console.error('WebSocket Error:', err);
+      };
     };
+    
+    connectWs();
 
     return () => {
        if (wsRef.current) wsRef.current.close();
