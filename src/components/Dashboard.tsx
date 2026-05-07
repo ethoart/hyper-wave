@@ -286,7 +286,7 @@ export function Dashboard() {
       const analysisRes = await axios.post('/api/analysis/generate', {
         symbol,
         interval: safeInterval,
-        data: chartData.slice(-50) // backend only needs a snapshot for LLM/math
+        data: chartData.slice(-200) // backend needs enough data for pivot finding
       });
       const newAnalysis = analysisRes.data;
       setAnalyses([newAnalysis, ...analyses]);

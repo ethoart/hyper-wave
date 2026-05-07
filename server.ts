@@ -422,12 +422,10 @@ async function startServer() {
         
         result = JSON.parse(text);
       } catch (aiError: any) {
-        console.warn("AI generation failed or had incorrect scopes, falling back to math engine output.", aiError.message);
+        console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError.message);
         
         result = {
-          analysisText: algoResult 
-            ? `AI generation unavailable. Showing pure algorithmic math engine output:\n\n${algoResult.reasoning}`
-            : "AI generation unavailable. Algorithmic engine did not find a strict setup.",
+          analysisText: `⚠️ AI connection failed (API Key missing or invalid permissions).\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
           winRate: algoResult ? "70%" : "N/A",
           entryPoint: algoResult?.entry || data[data.length - 1].close,
           exitPoint: algoResult?.target || data[data.length - 1].close * 1.05,

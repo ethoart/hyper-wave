@@ -58,7 +58,27 @@ export function analyzeElliottWaves(data: Kline[]) {
   const pivots = findPivots(data, 5, 5); // 5 bars left/right lookback
   
   let bestSetup: any = null;
-  let highestScore = -1;
+  let highestScore = -999999;
+
+  if (pivots.length < 5) {
+    // Fallback if not enough pivots found
+    const len = data.length;
+    return {
+      score: 0,
+      trend: data[len-1].close > data[0].close ? 'bullish' : 'bearish',
+      waves: {
+        start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time },
+        w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time },
+        w2: { price: data[Math.max(0, len-30)].close, time: data[Math.max(0, len-30)].time },
+        w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time },
+        w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time }
+      },
+      entry: data[len-1].close,
+      stopLoss: data[Math.max(0, len-50)].close,
+      target: data[len-1].close * 1.05,
+      reasoning: "Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend."
+    };
+  }
 
   for (let i = 0; i < pivots.length - 4; i++) {
     const p0 = pivots[i];
@@ -75,13 +95,19 @@ export function analyzeElliottWaves(data: Kline[]) {
       const w3 = p3.price;
       const w4 = p4.price;
 
-      // Rules Enforcement
-      if (w2 <= start || w4 <= w1 || w3 <= w1) continue;
+      // Rules Enforcement - Relaxed for "best effort" Crypto markets
+      let score = 0;
+      
+      // Basic directional checks - if it's completely wrong direction, then skip
+      if (w1 <= start || w3 <= w2) continue;
+
+      if (w2 <= start) score -= 50; // Wave 2 shouldn't go below start
+      if (w4 <= w1) score -= 30; // Overlap rule often broken in crypto by wicks
+      if (w3 <= w1) score -= 20; // Wave 3 usually the longest
 
       const len1 = w1 - start;
       const len3 = w3 - w2;
 
-      let score = 0;
       const retrace2 = (w1 - w2) / len1;
       if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 10;
       if (Math.abs(retrace2 - 0.618) < 0.1) score += 20;
@@ -126,12 +152,17 @@ export function analyzeElliottWaves(data: Kline[]) {
       const w3 = p3.price;
       const w4 = p4.price;
 
-      if (w2 >= start || w4 >= w1 || w3 >= w1) continue;
+      let score = 0;
+      
+      if (w1 >= start || w3 >= w2) continue; // Basic directional check
+
+      if (w2 >= start) score -= 50;
+      if (w4 >= w1) score -= 30;
+      if (w3 >= w1) score -= 20;
 
       const len1 = start - w1;
       const len3 = w2 - w3;
 
-      let score = 0;
       const retrace2 = (w2 - w1) / len1;
       if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 10;
       if (Math.abs(retrace2 - 0.618) < 0.1) score += 20;
