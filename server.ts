@@ -272,8 +272,8 @@ async function startServer() {
     try {
       // 24hr ticker to find top pairs
       const response = await axios.get('https://api.binance.com/api/v3/ticker/24hr');
-      const data = response.data.filter((d: any) => d.symbol.endsWith('USDT') && parseFloat(d.volume) > 10000000);
-      data.sort((a: any, b: any) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
+      const data = response.data.filter((d: any) => d.symbol.endsWith('USDT') && parseFloat(d.quoteVolume) > 50000000);
+      data.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
       const topPairs = data.slice(0, 5).map((bestPair: any) => ({
         symbol: bestPair.symbol,
         change: bestPair.priceChangePercent,

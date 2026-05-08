@@ -120,7 +120,7 @@ export function analyzeElliottWaves(data: Kline[]) {
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 10;
       if (Math.abs(retrace4 - 0.382) < 0.1) score += 20;
 
-      const recencyBoost = ((p4.index || i) / data.length) * 50;
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 500;
       score += recencyBoost;
 
       if (score > highestScore) {
@@ -178,7 +178,7 @@ export function analyzeElliottWaves(data: Kline[]) {
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 10;
       if (Math.abs(retrace4 - 0.382) < 0.1) score += 20;
 
-      const recencyBoost = ((p4.index || i) / data.length) * 50;
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 500;
       score += recencyBoost;
 
       if (score > highestScore) {
