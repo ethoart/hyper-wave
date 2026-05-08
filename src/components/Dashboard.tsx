@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { useAuth } from './AuthProvider';
 import axios from 'axios';
 import { WaveChart } from './WaveChart';
@@ -298,9 +299,7 @@ export function Dashboard() {
 
       let aiResult;
       try {
-        const apiKey = process.env.GEMINI_API_KEY; // Statically analyzed by Vite
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const prompt = `
           You are a highly skilled professional crypto trader and quantitative analyst specializing in Elliott Wave Theory.
           
@@ -341,7 +340,7 @@ export function Dashboard() {
       } catch (aiError: any) {
         console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
         aiResult = {
-          analysisText: `⚠️ AI connection failed.\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
+          analysisText: `⚠️ AI connection failed: ${aiError.message}\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
           winRate: algoResult ? "70%" : "N/A",
           entryPoint: algoResult?.entry || dataToAnalyze[dataToAnalyze.length - 1].close,
           exitPoint: algoResult?.target || dataToAnalyze[dataToAnalyze.length - 1].close * 1.05,
