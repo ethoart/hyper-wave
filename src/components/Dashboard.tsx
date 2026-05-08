@@ -206,7 +206,7 @@ export function Dashboard() {
     let reconnectAttempts = 0;
     
     const connectWs = () => {
-      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -282,20 +282,98 @@ export function Dashboard() {
     setGenerating(true);
     try {
       const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
-      // Pass it to backend to analyze
-      const analysisRes = await axios.post('/api/analysis/generate', {
-        symbol,
-        interval: safeInterval,
-        data: chartData.slice(-200) // backend needs enough data for pivot finding
-      });
-      const newAnalysis = analysisRes.data;
+      
+      // Analyze mathematically locally instead of sending to server
+      // We import analyzeElliottWaves dynamically or we should have it imported at the top
+      const analyzeElliottWaves = (await import('../../ewEngine')).analyzeElliottWaves;
+      const dataToAnalyze = chartData.slice(-200);
+      const algoResult = analyzeElliottWaves(dataToAnalyze);
+      
+      const mathOutputText = algoResult 
+        ? `Algorithmic Math Engine found a ${algoResult.trend} Wave 4 setup. 
+           Calculated Entry Point: ${algoResult.entry}, Target: ${algoResult.target}, Invalidation Stop Loss: ${algoResult.stopLoss}. 
+           Pivots Found: Start={time: ${algoResult.waves.start.time}, price: ${algoResult.waves.start.price}}, ...
+           Reasoning: ${algoResult.reasoning}`
+        : `Algorithmic Math Engine did not find a strict 100% textbook 5-wave structure matching constraints. Please provide a best-effort structural analysis based on patterns.`;
+
+      let aiResult;
+      try {
+        const apiKey = process.env.GEMINI_API_KEY; // Statically analyzed by Vite
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `
+          You are a highly skilled professional crypto trader and quantitative analyst specializing in Elliott Wave Theory.
+          
+          We have an algorithmic pure-math engine that scans for pivot points and evaluates strict Elliott Wave mathematical constraints & Fibonacci relationships.
+          Math Engine Output for Context: ${mathOutputText}
+          
+          Recent Candlestick Data Snapshop for ${symbol} on ${safeInterval} TF:
+          ${JSON.stringify(dataToAnalyze.slice(-25))}
+          
+          Your task is to synthesize the math engine's output with your AI capability.
+          Confirm the Entry, Target, and Stop Loss points, and adjust them if you detect local support/resistance or candlestick exhaustion patterns. 
+          If the engine found no setup, find the closest structural opportunity or give a neutral standing. Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
+          
+          You must return the result as a valid JSON object matching this schema exactly, just raw JSON (no markdown):
+          {
+            "analysisText": "Your expert synthesis: How does the raw data support the engine's finding? What's the final trade rationale? EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
+            "winRate": "<percentage>%",
+            "entryPoint": <number>,
+            "exitPoint": <number>,
+            "stopLoss": <number>,
+            "trend": "bullish" | "bearish" | "neutral",
+            "wavePoints": [ {"time": <number exact same from time in provided array>, "price": <number>}, ...]
+          }
+        `;
+
+        const aiResponse = await ai.models.generateContent({
+          model: 'gemini-3.1-pro-preview',
+          contents: prompt
+        });
+        
+        let text = aiResponse.text?.trim() || "{}";
+        text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+        if (text.startsWith('```')) {
+            text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+        }
+        
+        aiResult = JSON.parse(text);
+      } catch (aiError: any) {
+        console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
+        aiResult = {
+          analysisText: `⚠️ AI connection failed.\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
+          winRate: algoResult ? "70%" : "N/A",
+          entryPoint: algoResult?.entry || dataToAnalyze[dataToAnalyze.length - 1].close,
+          exitPoint: algoResult?.target || dataToAnalyze[dataToAnalyze.length - 1].close * 1.05,
+          stopLoss: algoResult?.stopLoss || dataToAnalyze[dataToAnalyze.length - 1].close * 0.95,
+          trend: algoResult?.trend || 'neutral',
+          wavePoints: algoResult ? [
+            { time: algoResult.waves.start.time, price: algoResult.waves.start.price },
+            { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price },
+            { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price },
+            { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price },
+            { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price }
+          ] : []
+        };
+      }
+
+      // Format for saving locally (fake persistence in UI without db for now to be fast)
+      // or optionally post to a save backend endpoint if needed.
+      const newAnalysis = {
+         _id: 'local-' + Date.now(),
+         ...aiResult,
+         symbol,
+         timeframe: safeInterval,
+         timestamp: new Date().toISOString(),
+      };
+      
       setAnalyses([newAnalysis, ...analyses]);
       setActiveAnalysis(newAnalysis);
       
       // Auto-add a notification
       addNotification(`Engine processed ${symbol} - Trend: ${newAnalysis.trend}`);
     } catch (err: any) {
-      alert('Failed to generate: ' + (err.response?.data?.error || err.message));
+      alert('Failed to generate: ' + err.message);
     }
     setGenerating(false);
   };

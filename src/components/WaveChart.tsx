@@ -152,7 +152,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         priceLineVisible: false
       });
       // Filter out points that are outside the domain or invalid
-      const validPoints = wavePoints
+      let validPoints = wavePoints
         .filter(p => p && p.time && p.price)
         .map(p => {
             let timeVal = p.time!;
@@ -160,10 +160,23 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
               timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
             }
             return { time: timeVal as any, value: Number(p.price!) };
-        })
-        .sort((a, b) => a.time - b.time);
+        });
+
+      // Deduplicate by time and sort
+      const uniqueTimes = new Set();
+      validPoints = validPoints
+        .sort((a, b) => a.time - b.time)
+        .filter(p => {
+            if (uniqueTimes.has(p.time)) return false;
+            uniqueTimes.add(p.time);
+            return true;
+        });
       
-      if (validPoints.length > 0) waveSeries.setData(validPoints);
+      try {
+         if (validPoints.length > 0) waveSeries.setData(validPoints);
+      } catch (err) {
+         console.warn("Wavechart line series error:", err);
+      }
     }
 
     // Reference lines
