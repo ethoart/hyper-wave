@@ -215,74 +215,58 @@ export function Dashboard() {
     }
     const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
     
-    let reconnectAttempts = 0;
-    
-    const connectWs = () => {
-      // Use Binance Futures stream for perpetual charts
-      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+    // Reliable backend polling for live candle
+    // We use the backend to fetch klines, bypassing browser/geoblocks
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=2`);
+        if (res.data && res.data.length > 0) {
+           const latest = res.data[res.data.length - 1]; // current open candle
+           const previous = res.data.length > 1 ? res.data[res.data.length - 2] : null;
 
-      ws.onopen = () => console.log('WS Connected:', wsUrl);
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.e === 'kline') {
-            const kline = message.k;
-            const liveCandle = {
-              time: Math.floor(kline.t / 1000),
-              open: parseFloat(kline.o),
-              high: parseFloat(kline.h),
-              low: parseFloat(kline.l),
-              close: parseFloat(kline.c),
-              volume: parseFloat(kline.v),
-            };
-            
-            // Console log first ping to verify stream is healthy
-            if (!(window as any).loggedCandle) {
-               console.log("First live candle parsed successfully:", liveCandle);
-               (window as any).loggedCandle = true;
-            }
-            
-            setLiveCandle(liveCandle);
-            setTickCount(c => c + 1);
-            
-            if (kline.x) { // if candle is closed, append
-               setChartData(prev => {
-                  const newData = [...prev];
-                  const lastIdx = newData.length - 1;
-                  if (lastIdx >= 0) {
-                     if (newData[lastIdx].time === kline.t) {
-                        newData[lastIdx] = { ...liveCandle, time: kline.t };
-                     } else {
-                        newData.push({ ...liveCandle, time: kline.t });
-                     }
-                  }
-                  return newData;
-               });
-            }
-          }
-        } catch(e) {
-            console.error("WS Message Error:", e);
+           const liveCandle = {
+              time: Math.floor(latest.time / 1000), // convert MS to seconds for chart updating
+              open: latest.open,
+              high: latest.high,
+              low: latest.low,
+              close: latest.close,
+              volume: latest.volume,
+           };
+           
+           if (!(window as any).loggedCandle) {
+              console.log("First polled candle parsed successfully:", liveCandle);
+              (window as any).loggedCandle = true;
+           }
+           
+           setLiveCandle(liveCandle);
+           setTickCount(c => c + 1);
+           
+           // Manage chartData exactly the same way
+           setChartData(prev => {
+              if (prev.length === 0) return prev;
+              const newData = [...prev];
+              const lastIdx = newData.length - 1;
+              
+              if (newData[lastIdx].time === latest.time) {
+                 // Still current candle, data hasn't rolled over.
+                 newData[lastIdx] = latest; // store raw MS latest in chartData
+              } else if (newData[lastIdx].time < latest.time) {
+                 // Candle closed and a new one opened.
+                 if (previous && newData[lastIdx].time === previous.time) {
+                     newData[lastIdx] = previous; // snap the closed candle perfectly
+                 }
+                 newData.push(latest); // push new candle
+              }
+              return newData;
+           });
         }
-      };
-
-      ws.onclose = () => {
-        if (reconnectAttempts < 5) {
-          reconnectAttempts++;
-          setTimeout(connectWs, 2000 * reconnectAttempts);
-        }
-      };
-
-      ws.onerror = (err) => {
-         console.error('WebSocket Error:', err);
-      };
-    };
-    
-    connectWs();
+      } catch(e) {
+        // silently ignore polling errors to not spam console
+      }
+    }, 2000); // Poll every 2 seconds
 
     return () => {
-       if (wsRef.current) wsRef.current.close();
+       clearInterval(pollInterval);
     };
   }, [symbol, interval]);
 
