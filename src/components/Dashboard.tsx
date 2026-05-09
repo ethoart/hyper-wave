@@ -365,7 +365,34 @@ export function Dashboard() {
 
         const aiResponse = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
-          contents: prompt
+          contents: prompt,
+          config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                  type: "object",
+                  properties: {
+                      analysisText: { type: "string" },
+                      winRate: { type: "string" },
+                      entryPoint: { type: "number" },
+                      exitPoint: { type: "number" },
+                      stopLoss: { type: "number" },
+                      trend: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+                      wavePoints: {
+                          type: "array",
+                          items: {
+                              type: "object",
+                              properties: {
+                                  time: { type: "number" },
+                                  price: { type: "number" }
+                                  // we removed label here because it's added later
+                              },
+                              required: ["time", "price"]
+                          }
+                      }
+                  },
+                  required: ["analysisText", "winRate", "entryPoint", "exitPoint", "stopLoss", "trend", "wavePoints"]
+              }
+          }
         });
         
         let text = aiResponse.text?.trim() || "{}";

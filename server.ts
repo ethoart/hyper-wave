@@ -426,7 +426,30 @@ async function startServer() {
           model: 'gemini-2.5-pro',
           contents: prompt,
           config: {
-              responseMimeType: "application/json"
+              responseMimeType: "application/json",
+              responseSchema: {
+                  type: "object",
+                  properties: {
+                      analysisText: { type: "string" },
+                      winRate: { type: "string" },
+                      entryPoint: { type: "number" },
+                      exitPoint: { type: "number" },
+                      stopLoss: { type: "number" },
+                      trend: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+                      wavePoints: {
+                          type: "array",
+                          items: {
+                              type: "object",
+                              properties: {
+                                  time: { type: "number" },
+                                  price: { type: "number" }
+                              },
+                              required: ["time", "price"]
+                          }
+                      }
+                  },
+                  required: ["analysisText", "winRate", "entryPoint", "exitPoint", "stopLoss", "trend", "wavePoints"]
+              }
           }
         });
         
