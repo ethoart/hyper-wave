@@ -249,9 +249,16 @@ async function startServer() {
     let { symbol = 'BTCUSDT', interval = '1d', limit = '100' } = req.query;
     if (interval === 'undefined') interval = '1d';
     try {
-      // Free public endpoint (Binance Futures)
-      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
-      const response = await axios.get(url);
+      // Try Free public endpoint (Binance Futures)
+      let url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+      let response;
+      try {
+        response = await axios.get(url);
+      } catch (err) {
+        // Fallback to Spot API if not found on Futures
+        url = `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+        response = await axios.get(url);
+      }
       
       const data = response.data.map((d: any) => ({
         time: d[0],
@@ -459,7 +466,12 @@ async function startServer() {
             text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
         }
         
-        result = JSON.parse(text);
+        try {
+            result = JSON.parse(text);
+        } catch (parseError) {
+            console.warn("JSON parsing failed. Falling back.", text);
+            throw new Error((parseError as Error).message);
+        }
         
         // Safety guard against AI hallucinating flipped targets
         if (result.trend === 'bullish') {

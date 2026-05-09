@@ -297,6 +297,7 @@ export function Dashboard() {
 
   const fetchChartData = async () => {
     setLoadingConfig(true);
+    setChartData([]); // Clear previous chart data before loading new
     try {
       const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
       const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=500`);
@@ -308,8 +309,8 @@ export function Dashboard() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.response?.status === 400 || err.response?.status === 404) {
-          alert(`Pair ${symbol} not found on Binance Futures. Try another pair.`);
+      if (err.response?.status === 400 || err.response?.status === 404 || err.response?.status === 500) {
+          alert(`Pair ${symbol} not found on Binance. Please try a valid Binance Spot or Futures pair (e.g. BTCUSDT, ETHUSDT).`);
       }
     }
     setLoadingConfig(false);
@@ -364,7 +365,7 @@ export function Dashboard() {
         `;
 
         const aiResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-2.5-pro',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -384,7 +385,6 @@ export function Dashboard() {
                               properties: {
                                   time: { type: "number" },
                                   price: { type: "number" }
-                                  // we removed label here because it's added later
                               },
                               required: ["time", "price"]
                           }
@@ -401,7 +401,14 @@ export function Dashboard() {
             text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
         }
         
-        aiResult = JSON.parse(text);
+        try {
+            aiResult = JSON.parse(text);
+        } catch (parseError) {
+            console.warn("MimeType JSON parsing failed. Attempting dirty string fix...", text);
+            // sometimes the LLM accidentally leaves a trailing comma or unescaped quote in 'analysisText'.
+            // fall back to purely relying on math engine data but preserving some fields if we just error out.
+            throw new Error("JSON parsing failed due to malformed output from Gemini. " + (parseError as Error).message);
+        }
         
         // Force math engine wave points to ensure labels are preserved
         if (algoResult && algoResult.waves) {
