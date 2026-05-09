@@ -105,8 +105,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
   let bestSetup: any = null;
   let highestScore = -999999;
 
-  const len = data.length;
-  const generateFallback = () => {
+  if (pivots.length < 5) {
+    // Fallback if not enough pivots found
+    const len = data.length;
     const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
     const entry = data[len-1].close;
     const target = isBull ? entry * 1.05 : entry * 0.95;
@@ -128,12 +129,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
       target: target,
       tradeStyle,
       gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Not enough distinct market pivots found or setup invalidated. Best-effort directional projection based on recent trend. Drawing simple structural bounds.${rsiDivergence}`
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend. Drawing simple structural bounds.${rsiDivergence}`
     };
-  };
-
-  if (pivots.length < 5) {
-    return generateFallback();
   }
 
   for (let i = 0; i < pivots.length - 4; i++) {
@@ -296,23 +293,6 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
         };
       }
     }
-  }
-
-  if (bestSetup) {
-    const currentPrice = data[data.length - 1].close;
-    if (bestSetup.trend === 'bullish') {
-      if (currentPrice < bestSetup.stopLoss || currentPrice >= bestSetup.target) {
-        return generateFallback(); // invalid or already hit
-      }
-      bestSetup.entry = currentPrice; // Set entry to live price
-    } else if (bestSetup.trend === 'bearish') {
-      if (currentPrice > bestSetup.stopLoss || currentPrice <= bestSetup.target) {
-        return generateFallback(); // invalid or already hit
-      }
-      bestSetup.entry = currentPrice; // Set entry to live price
-    }
-  } else {
-    return generateFallback();
   }
 
   return bestSetup;

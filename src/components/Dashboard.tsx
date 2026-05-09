@@ -215,58 +215,68 @@ export function Dashboard() {
     }
     const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
     
-    // Reliable backend polling for live candle
-    // We use the backend to fetch klines, bypassing browser/geoblocks
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=2`);
-        if (res.data && res.data.length > 0) {
-           const latest = res.data[res.data.length - 1]; // current open candle
-           const previous = res.data.length > 1 ? res.data[res.data.length - 2] : null;
+    let reconnectAttempts = 0;
+    
+    const connectWs = () => {
+      // Use Binance Futures stream for perpetual charts
+      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-           const liveCandle = {
-              time: Math.floor(latest.time / 1000), // convert MS to seconds for chart updating
-              open: latest.open,
-              high: latest.high,
-              low: latest.low,
-              close: latest.close,
-              volume: latest.volume,
-           };
-           
-           if (!(window as any).loggedCandle) {
-              console.log("First polled candle parsed successfully:", liveCandle);
-              (window as any).loggedCandle = true;
-           }
-           
-           setLiveCandle(liveCandle);
-           setTickCount(c => c + 1);
-           
-           // Manage chartData exactly the same way
-           setChartData(prev => {
-              if (prev.length === 0) return prev;
-              const newData = [...prev];
-              const lastIdx = newData.length - 1;
-              
-              if (newData[lastIdx].time === latest.time) {
-                 // Still current candle, data hasn't rolled over.
-                 newData[lastIdx] = latest; // store raw MS latest in chartData
-              } else if (newData[lastIdx].time < latest.time) {
-                 // Candle closed and a new one opened.
-                 if (previous && newData[lastIdx].time === previous.time) {
-                     newData[lastIdx] = previous; // snap the closed candle perfectly
-                 }
-                 newData.push(latest); // push new candle
-              }
-              return newData;
-           });
+      ws.onopen = () => console.log('WS Connected:', wsUrl);
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.e === 'kline') {
+          const kline = message.k;
+          const liveCandle = {
+            time: Math.floor(kline.t / 1000),
+            open: parseFloat(kline.o),
+            high: parseFloat(kline.h),
+            low: parseFloat(kline.l),
+            close: parseFloat(kline.c),
+            volume: parseFloat(kline.v),
+          };
+          if (!(window as any).loggedCandle) {
+             console.log("First live candle:", liveCandle);
+             (window as any).loggedCandle = true;
+          }
+          setLiveCandle(liveCandle);
+          setTickCount(c => c + 1);
+          
+          if (kline.x) { // if candle is closed, we can fetch new data to update indicators or just append
+             // We can append to chartData safely
+             setChartData(prev => {
+                const newData = [...prev];
+                const lastIdx = newData.length - 1;
+                if (lastIdx >= 0) {
+                   if (newData[lastIdx].time === kline.t) {
+                      newData[lastIdx] = { ...liveCandle, time: kline.t }; // use original ms time
+                   } else {
+                      newData.push({ ...liveCandle, time: kline.t });
+                   }
+                }
+                return newData;
+             });
+          }
         }
-      } catch(e) {
-        // silently ignore polling errors to not spam console
-      }
-    }, 2000); // Poll every 2 seconds
+      };
+
+      ws.onclose = () => {
+        if (reconnectAttempts < 5) {
+          reconnectAttempts++;
+          setTimeout(connectWs, 2000 * reconnectAttempts);
+        }
+      };
+
+      ws.onerror = (err) => {
+         console.error('WebSocket Error:', err);
+      };
+    };
+    
+    connectWs();
 
     return () => {
-       clearInterval(pollInterval);
+       if (wsRef.current) wsRef.current.close();
     };
   }, [symbol, interval]);
 
@@ -456,9 +466,8 @@ export function Dashboard() {
     }
   };
 
-  const handleScanBestPair = async (autoSwitch: boolean = true) => {
+  const handleScanBestPair = async () => {
     setScanning(true);
-    if (autoSwitch) addNotification(`Scanning for active setups...`);
     try {
       const res = await axios.get('/api/market/scan');
       if (res.data && res.data.topPairs && res.data.topPairs.length > 0) {
@@ -472,21 +481,12 @@ export function Dashboard() {
           return updated;
         });
         
-        addNotification(`Engine found live setups: ${newSymbols.join(', ')}`);
-        
-        if (autoSwitch) {
-            setSymbol(best.symbol);
-            setSymbolInput(best.symbol);
-            setTimeout(() => {
-               handleGenerate(); // automatically analyze it on the chart
-            }, 1000);
-        }
-      } else {
-        if (autoSwitch) addNotification("No trading position available right now.");
+        addNotification(`Engine found best pairs: ${newSymbols.join(', ')}`);
+        setSymbol(best.symbol);
+        setSymbolInput(best.symbol);
       }
     } catch(err) {
       console.error("Scan error", err);
-      if (autoSwitch) addNotification("Error scanning market pairs.");
     }
     setScanning(false);
   };
@@ -495,8 +495,7 @@ export function Dashboard() {
   useEffect(() => {
     const scanInterval = setInterval(() => {
        if (user?.role === 'admin' || user?.role === 'pro') {
-         // Auto scan in background but don't force switch the symbol
-         handleScanBestPair(false);
+         handleScanBestPair();
        }
     }, 60000 * 5); // every 5 minutes
     return () => clearInterval(scanInterval);

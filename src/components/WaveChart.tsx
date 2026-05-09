@@ -56,9 +56,6 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     }
   }, [liveCandle]);
 
-  const analysisHash = JSON.stringify({ entryPoint, exitPoint, stopLoss, wavePoints, trend, showSMA, showBB, showRSI });
-  const prevAnalysisHash = useRef(analysisHash);
-
   useEffect(() => {
     if (!chartContainerRef.current || !data || data.length === 0) return;
 
@@ -72,17 +69,11 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     }));
     formattedData.sort((a, b) => a.time - b.time);
 
-    const isAnalysisChanged = analysisHash !== prevAnalysisHash.current;
-    
-    // If only data changed, just update data
-    if (chartRef.current && candlestickSeriesRef.current && !isAnalysisChanged) {
+    if (chartRef.current && candlestickSeriesRef.current) {
+        // If chart exists, just update data to avoid full recreation flash
         candlestickSeriesRef.current.setData(formattedData);
-        // also implicitly update SMA, BB and RSI if we want, but it's okay, live updates update it anyway on tick?
-        // Wait, full data reload needs them updated too, but we can just let it be or just recreate. Recreating every minute isn't terrible if we want everything exact, but setData avoids flash.
         return;
     }
-    
-    prevAnalysisHash.current = analysisHash;
 
     if (chartRef.current) {
         chartRef.current.remove();
