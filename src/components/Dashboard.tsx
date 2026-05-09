@@ -235,6 +235,10 @@ export function Dashboard() {
             close: parseFloat(kline.c),
             volume: parseFloat(kline.v),
           };
+          if (!(window as any).loggedCandle) {
+             console.log("First live candle:", liveCandle);
+             (window as any).loggedCandle = true;
+          }
           setLiveCandle(liveCandle);
           
           if (kline.x) { // if candle is closed, we can fetch new data to update indicators or just append
@@ -548,6 +552,9 @@ export function Dashboard() {
     <div className="h-[100dvh] w-screen bg-[#000] text-[#d1d4dc] flex flex-col font-sans overflow-hidden">
       {/* Top Header */}
       <header className="h-[52px] md:h-14 border-b border-[#2a2e39] flex justify-between items-center px-3 md:px-4 bg-[#131722] shrink-0 w-full z-30">
+        <div className="hidden lg:flex items-center text-xs text-[#089981] font-mono mr-4">
+          Live: {liveCandle?.close || '-'}
+        </div>
         {/* Left section: App Name & Mobile menu */}
         <div className="flex items-center gap-3 md:gap-4 flex-shrink-0">
           <button 
