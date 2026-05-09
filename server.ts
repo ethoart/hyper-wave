@@ -280,17 +280,49 @@ async function startServer() {
         !d.symbol.includes('TUSD') &&
         !d.symbol.includes('BUSD') &&
         !d.symbol.includes('EUR') &&
-        parseFloat(d.quoteVolume) > 1000000 // allow small pairs too
+        parseFloat(d.quoteVolume) > 10000000 // min 10m volume for better setups
       );
       
+      // Sort by volatility
       data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
-      const topPairs = data.slice(0, 5).map((bestPair: any) => ({
-        symbol: bestPair.symbol,
-        change: bestPair.priceChangePercent,
-        volume: bestPair.volume,
-        lastPrice: bestPair.lastPrice
+      const bestCandidates = data.slice(0, 15);
+      
+      const validPairs: any[] = [];
+      
+      // Fetch klines concurrently to find real EW setups
+      await Promise.all(bestCandidates.map(async (candidate: any) => {
+         try {
+             const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${candidate.symbol}&interval=15m&limit=200`;
+             const kRes = await axios.get(url);
+             const klines = kRes.data.map((d: any) => ({
+                 time: d[0],
+                 open: parseFloat(d[1]),
+                 high: parseFloat(d[2]),
+                 low: parseFloat(d[3]),
+                 close: parseFloat(d[4]),
+                 volume: parseFloat(d[5]),
+             }));
+             const analysis = analyzeElliottWaves(klines, '15m');
+             if (analysis && analysis.trend !== 'neutral') {
+                 validPairs.push({
+                     symbol: candidate.symbol,
+                     change: candidate.priceChangePercent,
+                     volume: candidate.volume,
+                     lastPrice: candidate.lastPrice,
+                     trend: analysis.trend,
+                     score: analysis.score,
+                     entry: analysis.entry,
+                     target: analysis.target
+                 });
+             }
+         } catch(e) {
+             // ignore individual fetch faults
+         }
       }));
-      res.json({ topPairs });
+      
+      validPairs.sort((a, b) => b.score - a.score);
+      const topPairs = validPairs.slice(0, 5);
+      res.json({ topPairs, count: validPairs.length });
     } catch (err: any) {
       console.error(err.response?.data || err.message);
       res.status(500).json({ error: 'Failed to scan market data' });

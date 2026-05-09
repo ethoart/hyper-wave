@@ -219,45 +219,51 @@ export function Dashboard() {
     
     const connectWs = () => {
       // Use Binance Futures stream for perpetual charts
-      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => console.log('WS Connected:', wsUrl);
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.e === 'kline') {
-          const kline = message.k;
-          const liveCandle = {
-            time: Math.floor(kline.t / 1000),
-            open: parseFloat(kline.o),
-            high: parseFloat(kline.h),
-            low: parseFloat(kline.l),
-            close: parseFloat(kline.c),
-            volume: parseFloat(kline.v),
-          };
-          if (!(window as any).loggedCandle) {
-             console.log("First live candle:", liveCandle);
-             (window as any).loggedCandle = true;
+        try {
+          const message = JSON.parse(event.data);
+          if (message.e === 'kline') {
+            const kline = message.k;
+            const liveCandle = {
+              time: Math.floor(kline.t / 1000),
+              open: parseFloat(kline.o),
+              high: parseFloat(kline.h),
+              low: parseFloat(kline.l),
+              close: parseFloat(kline.c),
+              volume: parseFloat(kline.v),
+            };
+            
+            // Console log first ping to verify stream is healthy
+            if (!(window as any).loggedCandle) {
+               console.log("First live candle parsed successfully:", liveCandle);
+               (window as any).loggedCandle = true;
+            }
+            
+            setLiveCandle(liveCandle);
+            setTickCount(c => c + 1);
+            
+            if (kline.x) { // if candle is closed, append
+               setChartData(prev => {
+                  const newData = [...prev];
+                  const lastIdx = newData.length - 1;
+                  if (lastIdx >= 0) {
+                     if (newData[lastIdx].time === kline.t) {
+                        newData[lastIdx] = { ...liveCandle, time: kline.t };
+                     } else {
+                        newData.push({ ...liveCandle, time: kline.t });
+                     }
+                  }
+                  return newData;
+               });
+            }
           }
-          setLiveCandle(liveCandle);
-          setTickCount(c => c + 1);
-          
-          if (kline.x) { // if candle is closed, we can fetch new data to update indicators or just append
-             // We can append to chartData safely
-             setChartData(prev => {
-                const newData = [...prev];
-                const lastIdx = newData.length - 1;
-                if (lastIdx >= 0) {
-                   if (newData[lastIdx].time === kline.t) {
-                      newData[lastIdx] = { ...liveCandle, time: kline.t }; // use original ms time
-                   } else {
-                      newData.push({ ...liveCandle, time: kline.t });
-                   }
-                }
-                return newData;
-             });
-          }
+        } catch(e) {
+            console.error("WS Message Error:", e);
         }
       };
 
@@ -466,8 +472,9 @@ export function Dashboard() {
     }
   };
 
-  const handleScanBestPair = async () => {
+  const handleScanBestPair = async (autoSwitch: boolean = true) => {
     setScanning(true);
+    if (autoSwitch) addNotification(`Scanning for active setups...`);
     try {
       const res = await axios.get('/api/market/scan');
       if (res.data && res.data.topPairs && res.data.topPairs.length > 0) {
@@ -481,12 +488,21 @@ export function Dashboard() {
           return updated;
         });
         
-        addNotification(`Engine found best pairs: ${newSymbols.join(', ')}`);
-        setSymbol(best.symbol);
-        setSymbolInput(best.symbol);
+        addNotification(`Engine found live setups: ${newSymbols.join(', ')}`);
+        
+        if (autoSwitch) {
+            setSymbol(best.symbol);
+            setSymbolInput(best.symbol);
+            setTimeout(() => {
+               handleGenerate(); // automatically analyze it on the chart
+            }, 1000);
+        }
+      } else {
+        if (autoSwitch) addNotification("No trading position available right now.");
       }
     } catch(err) {
       console.error("Scan error", err);
+      if (autoSwitch) addNotification("Error scanning market pairs.");
     }
     setScanning(false);
   };
@@ -495,7 +511,8 @@ export function Dashboard() {
   useEffect(() => {
     const scanInterval = setInterval(() => {
        if (user?.role === 'admin' || user?.role === 'pro') {
-         handleScanBestPair();
+         // Auto scan in background but don't force switch the symbol
+         handleScanBestPair(false);
        }
     }, 60000 * 5); // every 5 minutes
     return () => clearInterval(scanInterval);
