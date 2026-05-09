@@ -401,7 +401,9 @@ async function startServer() {
           ${JSON.stringify(data.slice(-25))}
           
           Your task is to synthesize the math engine's output with your AI capability.
-          Read the candlesticks, confirm the mathematical Entry, Target, and Stop Loss points, and slightly adjust them if you detect local support/resistance or candlestick exhaustion patterns that the math missed. 
+          Look at the LAST FEW CANDLES in the provided data. This is the current active price.
+          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it), you MUST calculate a NEW actionable trade setup based on the CURRENT price action (e.g. a continuation breakout, a pullback level, or reversal). Do not give an old, un-tradable entry.
+          Read the candlesticks, confirm or adjust the mathematical Entry, Target, and Stop Loss points based on local support/resistance or exhaustion patterns. 
           If the engine found no setup, find the closest structural opportunity or give a neutral standing. Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
@@ -469,6 +471,7 @@ async function startServer() {
           symbol,
           timeframe: interval,
           analysisText: result.analysisText,
+          winRate: result.winRate,
           entryPoint: result.entryPoint,
           exitPoint: result.exitPoint,
           stopLoss: result.stopLoss,

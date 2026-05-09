@@ -343,12 +343,13 @@ export function Dashboard() {
           We have an algorithmic pure-math engine that scans for pivot points and evaluates strict Elliott Wave mathematical constraints & Fibonacci relationships.
           Math Engine Output for Context: ${mathOutputText}
           
-          Recent Candlestick Data Snapshop for ${symbol} on ${safeInterval} TF:
+          Recent Candlestick Data Snapshop for ${symbol} on ${safeInterval} TF. The LAST candle is the current active price:
           ${JSON.stringify(dataToAnalyze.slice(-25))}
           
           Your task is to synthesize the math engine's output with your AI capability.
-          Confirm the Entry, Target, and Stop Loss points, and adjust them if you detect local support/resistance or candlestick exhaustion patterns. 
-          If the engine found no setup, find the closest structural opportunity or give a neutral standing. Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
+          CRITICAL: Look at the CURRENT price (the last candle). If the math engine's suggested entry point has already been MISSED (the price moved significantly past it), you MUST calculate a NEW actionable trade setup based on current price action (like a continuation breakout, a pullback, etc.). Do not give an old, un-tradable entry.
+          Confirm or adjust the Entry, Target, and Stop Loss points.
+          Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON (no markdown):
           {
@@ -384,9 +385,7 @@ export function Dashboard() {
                  { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price, label: '3' },
                  { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price, label: '4' }
              ];
-             aiResult.entryPoint = algoResult.entry;
-             aiResult.exitPoint = algoResult.target;
-             aiResult.stopLoss = algoResult.stopLoss;
+             // DO NOT override AI's smart entry/exit/stop targets with the outdated algo results!
         }
       } catch (aiError: any) {
         console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
@@ -864,6 +863,10 @@ plot(close)"
                      <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
                        <div className="text-[#787b86] text-xs">Predicted Gain</div>
                        <div className="text-[#089981] font-mono text-sm mt-1">{activeAnalysis.gainPct ? `+${activeAnalysis.gainPct}%` : '-'}</div>
+                     </div>
+                     <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39] col-span-2">
+                       <div className="text-[#787b86] text-xs">AI Probability</div>
+                       <div className="text-[#eab308] font-mono text-sm mt-1">{activeAnalysis.winRate || 'Calculating...'}</div>
                      </div>
                    </div>
                    
