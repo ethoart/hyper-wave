@@ -47,6 +47,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
             close: liveCandle.close,
         };
         try {
+            // Optional debug
+            // console.log("Live timeVal:", timeVal, typeof timeVal);
             candlestickSeriesRef.current.update(formattedLiveCandle);
         } catch(e: any) {
             console.error("Live candle update error:", e.message, formattedLiveCandle);
@@ -57,11 +59,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   useEffect(() => {
     if (!chartContainerRef.current || !data || data.length === 0) return;
 
-    if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-    }
-
+    // Format data first
     const formattedData = data.map(d => ({
       time: Math.floor(new Date(d.time).getTime() / 1000) as any,
       open: d.open,
@@ -70,6 +68,17 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       close: d.close,
     }));
     formattedData.sort((a, b) => a.time - b.time);
+
+    if (chartRef.current && candlestickSeriesRef.current) {
+        // If chart exists, just update data to avoid full recreation flash
+        candlestickSeriesRef.current.setData(formattedData);
+        return;
+    }
+
+    if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+    }
 
     // Main Chart
     const chart = createChart(chartContainerRef.current, {
