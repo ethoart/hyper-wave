@@ -48,8 +48,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         };
         try {
             candlestickSeriesRef.current.update(formattedLiveCandle);
-        } catch(e) {
-            // ignore out of order errors
+        } catch(e: any) {
+            console.error("Live candle update error:", e.message, formattedLiveCandle);
         }
     }
   }, [liveCandle]);

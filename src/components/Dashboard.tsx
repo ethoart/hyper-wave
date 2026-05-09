@@ -212,6 +212,7 @@ export function Dashboard() {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      ws.onopen = () => console.log('WS Connected:', wsUrl);
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.e === 'kline') {
@@ -225,6 +226,22 @@ export function Dashboard() {
             volume: parseFloat(kline.v),
           };
           setLiveCandle(liveCandle);
+          
+          if (kline.x) { // if candle is closed, we can fetch new data to update indicators or just append
+             // We can append to chartData safely
+             setChartData(prev => {
+                const newData = [...prev];
+                const lastIdx = newData.length - 1;
+                if (lastIdx >= 0) {
+                   if (newData[lastIdx].time === kline.t) {
+                      newData[lastIdx] = { ...liveCandle, time: kline.t }; // use original ms time
+                   } else {
+                      newData.push({ ...liveCandle, time: kline.t });
+                   }
+                }
+                return newData;
+             });
+          }
         }
       };
 
@@ -545,12 +562,12 @@ export function Dashboard() {
           
           <div className="h-5 w-[1px] bg-[#2a2e39] mx-2"></div>
           
-          <div className="flex items-center space-x-1">
-             {['15m', '1h', '4h', '1d', '1w'].map(tf => (
+          <div className="flex items-center space-x-1 overflow-x-auto hide-scrollbar max-w-[250px] md:max-w-none">
+             {['1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'].map(tf => (
                <button 
                  key={tf}
                  onClick={() => setChartInterval(tf)}
-                 className={`px-2 py-1 text-sm rounded transition-colors ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:bg-[#2a2e39]'}`}
+                 className={`px-2 py-1 text-xs md:text-sm rounded transition-colors ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:bg-[#2a2e39]'}`}
                >
                  {tf}
                </button>

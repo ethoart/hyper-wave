@@ -76,7 +76,7 @@ export function analyzeElliottWaves(data: Kline[]) {
       entry: data[len-1].close,
       stopLoss: data[len-1].close > data[0].close ? data[Math.max(0, len-50)].close : data[len-1].close * 1.05,
       target: data[len-1].close > data[0].close ? data[len-1].close * 1.05 : data[len-1].close * 0.95,
-      reasoning: "Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend."
+      reasoning: "Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend. Drawing simple structural bounds."
     };
   }
 
@@ -156,7 +156,7 @@ export function analyzeElliottWaves(data: Kline[]) {
           entry: w4,
           stopLoss: validStopLoss, // Invalidation line
           target: finalTarget,
-          reasoning: `Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          reasoning: `[BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
@@ -228,7 +228,7 @@ export function analyzeElliottWaves(data: Kline[]) {
           entry: w4,
           stopLoss: validStopLoss,
           target: finalTarget,
-          reasoning: `Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          reasoning: `[BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
