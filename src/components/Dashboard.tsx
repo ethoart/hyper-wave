@@ -219,7 +219,7 @@ export function Dashboard() {
     
     const connectWs = () => {
       // Use Binance Futures stream for perpetual charts
-      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 

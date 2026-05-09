@@ -414,6 +414,10 @@ async function startServer() {
             "trend": "bullish" | "bearish" | "neutral",
             "wavePoints": [ {"time": <unix epoch ms>, "price": <number>}, ...up to 6 points representing the analyzed wave structure. IMPORTANT: The "time" value MUST exactly match one of the "time" values from the provided recent price data array, otherwise the chart will crash! ]
           }
+          CRITICAL CONSTRAINT: 
+          If trend is "bullish", you MUST ensure exitPoint > entryPoint > stopLoss. 
+          If trend is "bearish", you MUST ensure exitPoint < entryPoint < stopLoss.
+          Any violation of this mathematical constraint will result in a fatal invalidation of the trade logic.
         `;
 
         const aiResponse = await ai.models.generateContent({
@@ -431,6 +435,15 @@ async function startServer() {
         }
         
         result = JSON.parse(text);
+        
+        // Safety guard against AI hallucinating flipped targets
+        if (result.trend === 'bullish') {
+           if (result.exitPoint <= result.entryPoint) result.exitPoint = result.entryPoint * 1.05;
+           if (result.stopLoss >= result.entryPoint) result.stopLoss = result.entryPoint * 0.95;
+        } else if (result.trend === 'bearish') {
+           if (result.exitPoint >= result.entryPoint) result.exitPoint = result.entryPoint * 0.95;
+           if (result.stopLoss <= result.entryPoint) result.stopLoss = result.entryPoint * 1.05;
+        }
       } catch (aiError: any) {
         console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError.message);
         
