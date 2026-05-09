@@ -8,14 +8,16 @@ interface ChartProps {
   entryPoint?: number;
   exitPoint?: number;
   stopLoss?: number;
-  wavePoints?: { time: number | string; price: number }[];
+  wavePoints?: { time: number | string; price: number, label?: string }[];
   trend?: "bullish" | "bearish" | "neutral" | string;
   activeTool?: string;
   drawingColor?: string;
   clearDrawings?: number;
+  channelPoints?: { time: number; price: number }[][];
+  flagPoints?: { time: number; price: number }[][];
 }
 
-export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0 }: ChartProps) {
+export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0, channelPoints, flagPoints }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const [showRSI, setShowRSI] = useState(true);
@@ -173,11 +175,88 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         });
       
       try {
-         if (validPoints.length > 0) waveSeries.setData(validPoints);
+         if (validPoints.length > 0) {
+             waveSeries.setData(validPoints);
+             
+             const markers: any[] = [];
+             wavePoints.forEach((p, idx) => {
+                 let text = p.label || '';
+                 if (!text) {
+                     if (idx === 0) text = '0';
+                     else if (idx === 1) text = '1';
+                     else if (idx === 2) text = '2';
+                     else if (idx === 3) text = '3';
+                     else if (idx === 4) text = '4';
+                     else if (idx === 5) text = '5';
+                 }
+                 
+                 let timeVal = p.time!;
+                 if (typeof timeVal === 'string' || (typeof timeVal === 'number' && timeVal > 1e11)) {
+                   timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+                 }
+                 
+                 const position = trend === 'bullish' 
+                    ? (idx % 2 === 0 ? 'belowBar' : 'aboveBar')
+                    : (idx % 2 === 0 ? 'aboveBar' : 'belowBar');
+
+                 if (text) {
+                    markers.push({
+                        time: timeVal,
+                        position: position,
+                        color: waveColor,
+                        shape: position === 'aboveBar' ? 'arrowDown' : 'arrowUp',
+                        text: text,
+                    });
+                 }
+             });
+             
+             markers.sort((a, b) => a.time - b.time);
+             candlestickSeries.setMarkers(markers);
+         }
       } catch (err) {
          console.warn("Wavechart line series error:", err);
       }
     }
+    
+    // Draw channels and flag lines
+    const drawExtraLines = (lineGroups: any[][], color: string, style: number) => {
+        if (!lineGroups || lineGroups.length === 0) return;
+        lineGroups.forEach(group => {
+           if (group.length > 1) {
+              const series = chart.addSeries(LineSeries, {
+                color: color,
+                lineWidth: 1,
+                lineStyle: style,
+                crosshairMarkerVisible: false,
+                lastValueVisible: false,
+                priceLineVisible: false
+              });
+              
+              let pts = group.map((p: any) => {
+                 let timeVal = p.time;
+                 if (typeof timeVal === 'string' || (typeof timeVal === 'number' && timeVal > 1e11)) {
+                   timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
+                 }
+                 return { time: timeVal, value: p.price };
+              }).sort((a: any, b: any) => a.time - b.time);
+              
+              // deduplicate
+              const uTimes = new Set();
+              pts = pts.filter((p: any) => {
+                 if (uTimes.has(p.time)) return false;
+                 uTimes.add(p.time);
+                 return true;
+              });
+              
+              if (pts.length > 0) {
+                 series.setData(pts);
+              }
+           }
+        });
+    };
+    
+    if (channelPoints) drawExtraLines(channelPoints, '#3b82f6', 1); // dotted for channel
+    if (flagPoints) drawExtraLines(flagPoints, '#f59e0b', 0); // solid for flag
 
     // Reference lines
     if (entryPoint) {

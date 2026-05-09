@@ -249,8 +249,8 @@ async function startServer() {
     let { symbol = 'BTCUSDT', interval = '1d', limit = '100' } = req.query;
     if (interval === 'undefined') interval = '1d';
     try {
-      // Free public endpoint
-      const url = `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
+      // Free public endpoint (Binance Futures)
+      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
       const response = await axios.get(url);
       
       const data = response.data.map((d: any) => ({
@@ -270,10 +270,20 @@ async function startServer() {
 
   app.get('/api/market/scan', async (req: any, res) => {
     try {
-      // 24hr ticker to find top pairs
-      const response = await axios.get('https://api.binance.com/api/v3/ticker/24hr');
-      const data = response.data.filter((d: any) => d.symbol.endsWith('USDT') && parseFloat(d.quoteVolume) > 50000000);
-      data.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+      // 24hr ticker to find top pairs from Binance Futures
+      const response = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr');
+      
+      const data = response.data.filter((d: any) => 
+        d.symbol.endsWith('USDT') && 
+        !d.symbol.includes('USDC') &&
+        !d.symbol.includes('FDUSD') &&
+        !d.symbol.includes('TUSD') &&
+        !d.symbol.includes('BUSD') &&
+        !d.symbol.includes('EUR') &&
+        parseFloat(d.quoteVolume) > 1000000 // allow small pairs too
+      );
+      
+      data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
       const topPairs = data.slice(0, 5).map((bestPair: any) => ({
         symbol: bestPair.symbol,
         change: bestPair.priceChangePercent,

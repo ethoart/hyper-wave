@@ -207,7 +207,8 @@ export function Dashboard() {
     let reconnectAttempts = 0;
     
     const connectWs = () => {
-      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      // Use Binance Futures stream for perpetual charts
+      const wsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -272,8 +273,11 @@ export function Dashboard() {
       if (activeAnalysis && (activeAnalysis.symbol !== symbol || activeAnalysis.timeframe !== safeInterval)) {
         setActiveAnalysis(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      if (err.response?.status === 400 || err.response?.status === 404) {
+          alert(`Pair ${symbol} not found on Binance Futures. Try another pair.`);
+      }
     }
     setLoadingConfig(false);
   };
@@ -337,10 +341,31 @@ export function Dashboard() {
         }
         
         aiResult = JSON.parse(text);
+        
+        // Force math engine wave points to ensure labels are preserved
+        if (algoResult && algoResult.waves) {
+             aiResult.wavePoints = [
+                 { time: algoResult.waves.start.time, price: algoResult.waves.start.price, label: '0' },
+                 { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price, label: '1' },
+                 { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price, label: '2' },
+                 { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price, label: '3' },
+                 { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price, label: '4' }
+             ];
+        }
       } catch (aiError: any) {
         console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
+        
+        let errorMsg = aiError.message || "Unknown error";
+        if (errorMsg.includes("Quota") || aiError.status === 429) {
+           errorMsg = "The AI service free-tier quota was exceeded. Please try again in 1 minute.";
+        } else if (errorMsg.includes("503") || aiError.status === 503 || errorMsg.includes("high demand")) {
+           errorMsg = "The AI model is overloaded with high demand. Please try again later.";
+        } else if (errorMsg.includes("scopes")) {
+           errorMsg = "Invalid API key or permissions.";
+        }
+        
         aiResult = {
-          analysisText: `⚠️ AI connection failed: ${aiError.message}\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
+          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
           winRate: algoResult ? "70%" : "N/A",
           entryPoint: algoResult?.entry || dataToAnalyze[dataToAnalyze.length - 1].close,
           exitPoint: algoResult?.target || dataToAnalyze[dataToAnalyze.length - 1].close * 1.05,
@@ -361,6 +386,8 @@ export function Dashboard() {
       const newAnalysis = {
          _id: 'local-' + Date.now(),
          ...aiResult,
+         channelPoints: algoResult?.channelPoints,
+         flagPoints: algoResult?.flagPoints,
          symbol,
          timeframe: safeInterval,
          timestamp: new Date().toISOString(),
@@ -713,6 +740,8 @@ plot(close)"
                    exitPoint={activeAnalysis?.exitPoint} 
                    stopLoss={activeAnalysis?.stopLoss} 
                    wavePoints={activeAnalysis?.wavePoints}
+                   channelPoints={activeAnalysis?.channelPoints}
+                   flagPoints={activeAnalysis?.flagPoints}
                    trend={activeAnalysis?.trend}
                    activeTool={activeTool}
                    drawingColor={drawingColor}

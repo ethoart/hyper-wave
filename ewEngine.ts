@@ -67,15 +67,15 @@ export function analyzeElliottWaves(data: Kline[]) {
       score: 0,
       trend: data[len-1].close > data[0].close ? 'bullish' : 'bearish',
       waves: {
-        start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time },
-        w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time },
-        w2: { price: data[Math.max(0, len-30)].close, time: data[Math.max(0, len-30)].time },
-        w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time },
-        w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time }
+        start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time, label: '0' },
+        w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time, label: '1' },
+        w2: { price: data[Math.max(0, len-30)].close, time: data[Math.max(0, len-30)].time, label: '2' },
+        w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time, label: '3' },
+        w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time, label: '4' }
       },
       entry: data[len-1].close,
-      stopLoss: data[Math.max(0, len-50)].close,
-      target: data[len-1].close * 1.05,
+      stopLoss: data[len-1].close > data[0].close ? data[Math.max(0, len-50)].close : data[len-1].close * 1.05,
+      target: data[len-1].close > data[0].close ? data[len-1].close * 1.05 : data[len-1].close * 0.95,
       reasoning: "Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend."
     };
   }
@@ -105,6 +105,8 @@ export function analyzeElliottWaves(data: Kline[]) {
       if (w4 <= w1) score -= 30; // Overlap rule often broken in crypto by wicks
       if (w3 <= w1) score -= 20; // Wave 3 usually the longest
 
+      if (w4 <= w2) continue; // W4 cannot go below W2 in bullish
+
       const len1 = w1 - start;
       const len3 = w3 - w2;
 
@@ -129,20 +131,32 @@ export function analyzeElliottWaves(data: Kline[]) {
         const target2 = w4 + 0.618 * (w3 - start);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
+        let validStopLoss = w1;
+        if (validStopLoss >= w4) {
+           validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
+        }
+        
         bestSetup = {
           score,
           trend: 'bullish',
           waves: { 
-            start: { price: p0.price, time: p0.time }, 
-            w1: { price: p1.price, time: p1.time }, 
-            w2: { price: p2.price, time: p2.time }, 
-            w3: { price: p3.price, time: p3.time }, 
-            w4: { price: p4.price, time: p4.time } 
+            start: { price: p0.price, time: p0.time, label: '0' }, 
+            w1: { price: p1.price, time: p1.time, label: '1' }, 
+            w2: { price: p2.price, time: p2.time, label: '2' }, 
+            w3: { price: p3.price, time: p3.time, label: '3' }, 
+            w4: { price: p4.price, time: p4.time, label: '4' } 
           },
+          channelPoints: [
+            [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Bottom trendline
+            [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Top trendline projected
+          ],
+          flagPoints: [
+             [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
+          ],
           entry: w4,
-          stopLoss: w1, // Invalidation line
+          stopLoss: validStopLoss, // Invalidation line
           target: finalTarget,
-          reasoning: `Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          reasoning: `Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
@@ -162,6 +176,8 @@ export function analyzeElliottWaves(data: Kline[]) {
       if (w2 >= start) score -= 50;
       if (w4 >= w1) score -= 30;
       if (w3 >= w1) score -= 20;
+
+      if (w4 >= w2) continue; // W4 cannot go above W2 in bearish
 
       const len1 = start - w1;
       const len3 = w2 - w3;
@@ -187,20 +203,32 @@ export function analyzeElliottWaves(data: Kline[]) {
         const target2 = w4 - 0.618 * (start - w3);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
+        let validStopLoss = w1;
+        if (validStopLoss <= w4) {
+           validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
+        }
+        
         bestSetup = {
           score,
           trend: 'bearish',
           waves: { 
-            start: { price: p0.price, time: p0.time }, 
-            w1: { price: p1.price, time: p1.time }, 
-            w2: { price: p2.price, time: p2.time }, 
-            w3: { price: p3.price, time: p3.time }, 
-            w4: { price: p4.price, time: p4.time } 
+            start: { price: p0.price, time: p0.time, label: '0' }, 
+            w1: { price: p1.price, time: p1.time, label: '1' }, 
+            w2: { price: p2.price, time: p2.time, label: '2' }, 
+            w3: { price: p3.price, time: p3.time, label: '3' }, 
+            w4: { price: p4.price, time: p4.time, label: '4' } 
           },
+          channelPoints: [
+            [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Top trendline
+            [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Bottom trendline projected
+          ],
+          flagPoints: [
+             [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
+          ],
           entry: w4,
-          stopLoss: w1,
+          stopLoss: validStopLoss,
           target: finalTarget,
-          reasoning: `Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          reasoning: `Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
         };
       }
     }
