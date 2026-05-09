@@ -54,18 +54,69 @@ export function findPivots(data: Kline[], left: number = 3, right: number = 3): 
   return filtered;
 }
 
-export function analyzeElliottWaves(data: Kline[]) {
+export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
+  // calculate RSI divergence over the last N candles
+  let rsiDivergence = "";
+  if (data.length > 30) {
+     const period = 14;
+     const rsiValues = [];
+     let gains = 0, losses = 0;
+     for (let i = 1; i <= period; i++) {
+        const change = data[i].close - data[i-1].close;
+        if (change > 0) gains += change;
+        else losses -= change;
+     }
+     let avgGain = gains / period;
+     let avgLoss = losses / period;
+     rsiValues.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss)));
+     
+     for (let i = period + 1; i < data.length; i++) {
+        const change = data[i].close - data[i-1].close;
+        const gain = change > 0 ? change : 0;
+        const loss = change < 0 ? -change : 0;
+        avgGain = (avgGain * 13 + gain) / 14;
+        avgLoss = (avgLoss * 13 + loss) / 14;
+        rsiValues.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss)));
+     }
+     
+     // basic divergence check on last few candles vs 20 candles ago
+     const rsiRecent = rsiValues[rsiValues.length - 1];
+     const rsiOld = rsiValues[Math.max(0, rsiValues.length - 20)];
+     const priceRecent = data[data.length - 1].close;
+     const priceOld = data[Math.max(0, data.length - 20)].close;
+     
+     if (priceRecent < priceOld && rsiRecent > rsiOld + 5) {
+         rsiDivergence = "\n\n⚠️ BULLISH RSI DIVERGENCE DETECTED: Price made a lower low but RSI made a higher low.";
+     } else if (priceRecent > priceOld && rsiRecent < rsiOld - 5) {
+         rsiDivergence = "\n\n⚠️ BEARISH RSI DIVERGENCE DETECTED: Price made a higher high but RSI made a lower high.";
+     }
+  }
+
   const pivots = findPivots(data, 5, 5); // 5 bars left/right lookback
   
+  const getTradeStyle = (intv: string) => {
+      if (['1m', '3m', '5m', '15m'].includes(intv)) return "SCALP TRADE";
+      if (['30m', '1h', '2h', '4h'].includes(intv)) return "DAY TRADE";
+      return "SWING TRADE";
+  };
+  
+  const tradeStyle = getTradeStyle(interval);
+
   let bestSetup: any = null;
   let highestScore = -999999;
 
   if (pivots.length < 5) {
     // Fallback if not enough pivots found
     const len = data.length;
+    const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
+    const entry = data[len-1].close;
+    const target = isBull ? entry * 1.05 : entry * 0.95;
+    const stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+    const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
+
     return {
       score: 0,
-      trend: data[len-1].close > data[0].close ? 'bullish' : 'bearish',
+      trend: isBull ? 'bullish' : 'bearish',
       waves: {
         start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time, label: '0' },
         w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time, label: '1' },
@@ -73,10 +124,12 @@ export function analyzeElliottWaves(data: Kline[]) {
         w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time, label: '3' },
         w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time, label: '4' }
       },
-      entry: data[len-1].close,
-      stopLoss: data[len-1].close > data[0].close ? data[Math.max(0, len-50)].close : data[len-1].close * 1.05,
-      target: data[len-1].close > data[0].close ? data[len-1].close * 1.05 : data[len-1].close * 0.95,
-      reasoning: "Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend. Drawing simple structural bounds."
+      entry: entry,
+      stopLoss: stop,
+      target: target,
+      tradeStyle,
+      gainPct,
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend. Drawing simple structural bounds.${rsiDivergence}`
     };
   }
 
@@ -136,6 +189,8 @@ export function analyzeElliottWaves(data: Kline[]) {
            validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
         }
         
+        const gainPct = (Math.abs(finalTarget - w4) / w4 * 100).toFixed(2);
+
         bestSetup = {
           score,
           trend: 'bullish',
@@ -156,7 +211,9 @@ export function analyzeElliottWaves(data: Kline[]) {
           entry: w4,
           stopLoss: validStopLoss, // Invalidation line
           target: finalTarget,
-          reasoning: `[BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          tradeStyle,
+          gainPct,
+          reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] [BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry around Wave 4 low (${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
         };
       }
     }
@@ -208,6 +265,8 @@ export function analyzeElliottWaves(data: Kline[]) {
            validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
         }
         
+        const gainPct = (Math.abs(finalTarget - w4) / w4 * 100).toFixed(2);
+
         bestSetup = {
           score,
           trend: 'bearish',
@@ -228,7 +287,9 @@ export function analyzeElliottWaves(data: Kline[]) {
           entry: w4,
           stopLoss: validStopLoss,
           target: finalTarget,
-          reasoning: `[BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.`
+          tradeStyle,
+          gainPct,
+          reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] [BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry around Wave 4 high (${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
         };
       }
     }

@@ -17,9 +17,19 @@ export function Dashboard() {
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [activeAnalysis, setActiveAnalysis] = useState<any>(null);
   
-  const [symbolInput, setSymbolInput] = useState('BTCUSDT');
-  const [symbol, setSymbol] = useState('BTCUSDT');
-  const [interval, setChartInterval] = useState('1d');
+  const [symbolInput, setSymbolInput] = useState(() => localStorage.getItem('hyperwave_symbol') || 'BTCUSDT');
+  const [symbol, setSymbol] = useState(() => localStorage.getItem('hyperwave_symbol') || 'BTCUSDT');
+  const [interval, setChartInterval] = useState(() => localStorage.getItem('hyperwave_interval') || '1d');
+  
+  // Persist symbol and interval changes
+  useEffect(() => {
+    localStorage.setItem('hyperwave_symbol', symbol);
+    setSymbolInput(symbol); // Keep input in sync
+  }, [symbol]);
+
+  useEffect(() => {
+    localStorage.setItem('hyperwave_interval', interval);
+  }, [interval]);
   
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades'>('watchlist');
@@ -309,7 +319,7 @@ export function Dashboard() {
       // We import analyzeElliottWaves dynamically or we should have it imported at the top
       const analyzeElliottWaves = (await import('../../ewEngine')).analyzeElliottWaves;
       const dataToAnalyze = chartData.slice(-200);
-      const algoResult = analyzeElliottWaves(dataToAnalyze);
+      const algoResult = analyzeElliottWaves(dataToAnalyze, safeInterval);
       
       const mathOutputText = algoResult 
         ? `Algorithmic Math Engine found a ${algoResult.trend} Wave 4 setup. 
@@ -368,6 +378,9 @@ export function Dashboard() {
                  { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price, label: '3' },
                  { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price, label: '4' }
              ];
+             aiResult.entryPoint = algoResult.entry;
+             aiResult.exitPoint = algoResult.target;
+             aiResult.stopLoss = algoResult.stopLoss;
         }
       } catch (aiError: any) {
         console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
@@ -403,6 +416,8 @@ export function Dashboard() {
       const newAnalysis = {
          _id: 'local-' + Date.now(),
          ...aiResult,
+         tradeStyle: algoResult?.tradeStyle,
+         gainPct: algoResult?.gainPct,
          channelPoints: algoResult?.channelPoints,
          flagPoints: algoResult?.flagPoints,
          symbol,
@@ -685,7 +700,7 @@ export function Dashboard() {
          </div>
          
          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
-             {['15m', '1h', '4h', '1d', '1w'].map(tf => (
+             {['1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'].map(tf => (
                <button 
                  key={tf}
                  onClick={() => setChartInterval(tf)}
@@ -821,20 +836,24 @@ plot(close)"
                        </div>
                      </div>
                      <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
-                       <div className="text-[#787b86] text-xs">Win Rate</div>
-                       <div className="text-[#2962ff] font-mono text-sm mt-1">{activeAnalysis.winRate || '-'}</div>
+                       <div className="text-[#787b86] text-xs">Trade Style</div>
+                       <div className="text-[#2962ff] font-mono text-sm mt-1">{activeAnalysis.tradeStyle || 'STANDARD'}</div>
                      </div>
                      <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
                        <div className="text-[#787b86] text-xs">Entry</div>
                        <div className="text-[#2962ff] font-mono text-sm mt-1">{activeAnalysis.entryPoint || '-'}</div>
                      </div>
                      <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
+                       <div className="text-[#787b86] text-xs">Stop Loss</div>
+                       <div className="text-[#f23645] font-mono text-sm mt-1">{activeAnalysis.stopLoss || '-'}</div>
+                     </div>
+                     <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
                        <div className="text-[#787b86] text-xs">Target</div>
                        <div className="text-[#089981] font-mono text-sm mt-1">{activeAnalysis.exitPoint || '-'}</div>
                      </div>
                      <div className="bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
-                       <div className="text-[#787b86] text-xs">Stop Loss</div>
-                       <div className="text-[#f23645] font-mono text-sm mt-1">{activeAnalysis.stopLoss || '-'}</div>
+                       <div className="text-[#787b86] text-xs">Predicted Gain</div>
+                       <div className="text-[#089981] font-mono text-sm mt-1">{activeAnalysis.gainPct ? `+${activeAnalysis.gainPct}%` : '-'}</div>
                      </div>
                    </div>
                    

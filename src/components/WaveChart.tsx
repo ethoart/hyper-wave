@@ -58,17 +58,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     if (!chartContainerRef.current || !data || data.length === 0) return;
 
     if (chartRef.current) {
-        // If chart exists, just update data
-        const formattedData = data.map(d => ({
-            time: Math.floor(new Date(d.time).getTime() / 1000) as any,
-            open: d.open,
-            high: d.high,
-            low: d.low,
-            close: d.close,
-        })).sort((a, b) => a.time - b.time);
-        
-        candlestickSeriesRef.current?.setData(formattedData);
-        return; // Early return to avoid recreating
+        chartRef.current.remove();
+        chartRef.current = null;
     }
 
     const formattedData = data.map(d => ({
