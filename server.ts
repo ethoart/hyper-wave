@@ -410,8 +410,8 @@ async function startServer() {
           Your task is to synthesize the math engine's output with your AI capability.
           Look at the LAST FEW CANDLES in the provided data. This is the current active price.
           CRITICAL: If the algorithmic engine explicitly states it "did not find a strict 100% textbook 5-wave structure", you MUST search the recent price action for other valid classic charting patterns such as Cup and Handle, Falling Wedges, Bull Flags, Triangles, or Double Bottoms/Tops.
-          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it and already hit target), you MUST ignore it and formulate a NEW actionable trade based on a current pattern (like a wedge breakout or cup and handle). If there is NO pattern to trade, set the "trend" to "neutral" and explain why.
-          Confirm or adjust the Entry, Target, and Stop Loss points based on local support/resistance.
+          CRITICAL: If the math engine found a valid wave but the price has already moved past the suggested entry and hit the target, it is invalidated. You MUST formulate a NEW actionable trade based on a CURRENT pattern. If there is NO pattern to trade, set the "trend" to "neutral" and explain why.
+          CRITICAL: The user wants an actionable trade RIGHT NOW. If a valid setup exists and is midway, set the 'entryPoint' near the CURRENT PRICE. Do NOT place the entry point deep in the past. Ensure your Target and Stop Loss make mathematical sense relative to this new localized entry.
           Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%"). If neutral, put "-".
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
@@ -432,7 +432,7 @@ async function startServer() {
         `;
 
         const aiResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.1-pro-preview',
           contents: prompt,
           config: {
               responseMimeType: "application/json",

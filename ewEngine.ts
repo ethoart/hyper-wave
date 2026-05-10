@@ -92,7 +92,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
      }
   }
 
-  const pivots = findPivots(data, 5, 5); // 5 bars left/right lookback
+  const pivots = findPivots(data, 12, 12); // 12 bars left/right lookback for stronger distinct structural waves
   
   const getTradeStyle = (intv: string) => {
       if (['1m', '3m', '5m', '15m'].includes(intv)) return "SCALP TRADE";
@@ -163,19 +163,23 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
       const len1 = w1 - start;
       const len3 = w3 - w2;
 
+      // Reward large structural waves
+      const waveSizePct = (p0.price > 0) ? ((w3 - p0.price) / p0.price * 100) : 0;
+      score += waveSizePct * 2; 
+
       const retrace2 = (w1 - w2) / len1;
-      if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 10;
-      if (Math.abs(retrace2 - 0.618) < 0.1) score += 20;
+      if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 20;
+      if (Math.abs(retrace2 - 0.618) < 0.1) score += 30;
 
       const ext3 = len3 / len1;
-      if (ext3 >= 1.0) score += 10;
-      if (Math.abs(ext3 - 1.618) < 0.2) score += 20;
+      if (ext3 >= 1.0) score += 20;
+      if (Math.abs(ext3 - 1.618) < 0.2) score += 30;
 
       const retrace4 = (w3 - w4) / len3;
-      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 10;
-      if (Math.abs(retrace4 - 0.382) < 0.1) score += 20;
+      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
+      if (Math.abs(retrace4 - 0.382) < 0.1) score += 30;
 
-      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 500;
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
       score += recencyBoost;
 
       if (score > highestScore) {
@@ -190,7 +194,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
            validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
         }
         
-        let suggestedEntry = currentPrice;
+        let suggestedEntry = w4;
         let isInvalidated = false;
         
         // Check if trade is already invalidated (hit target or stoploss)
@@ -251,19 +255,23 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
       const len1 = start - w1;
       const len3 = w2 - w3;
 
+      // Reward large structural waves
+      const waveSizePct = (p0.price > 0) ? ((p0.price - w3) / p0.price * 100) : 0;
+      score += waveSizePct * 2;
+
       const retrace2 = (w2 - w1) / len1;
-      if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 10;
-      if (Math.abs(retrace2 - 0.618) < 0.1) score += 20;
+      if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 20;
+      if (Math.abs(retrace2 - 0.618) < 0.1) score += 30;
 
       const ext3 = len3 / len1;
-      if (ext3 >= 1.0) score += 10;
-      if (Math.abs(ext3 - 1.618) < 0.2) score += 20;
+      if (ext3 >= 1.0) score += 20;
+      if (Math.abs(ext3 - 1.618) < 0.2) score += 30;
 
       const retrace4 = (w4 - w3) / len3;
-      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 10;
-      if (Math.abs(retrace4 - 0.382) < 0.1) score += 20;
+      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
+      if (Math.abs(retrace4 - 0.382) < 0.1) score += 30;
 
-      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 500;
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
       score += recencyBoost;
 
       if (score > highestScore) {
@@ -278,7 +286,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
            validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
         }
         
-        let suggestedEntry = currentPrice;
+        let suggestedEntry = w4;
         let isInvalidated = false;
         
         // Check if trade is already invalidated (hit target or stoploss)

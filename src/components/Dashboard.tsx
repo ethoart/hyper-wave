@@ -352,8 +352,15 @@ export function Dashboard() {
          });
          aiResult = res.data;
          
-         // Force math engine wave points to ensure labels are preserved
-         if (algoResult && algoResult.waves) {
+         // Process the wave points returned from AI, adding labels if they exist
+         if (aiResult.wavePoints && aiResult.wavePoints.length > 0) {
+              aiResult.wavePoints = aiResult.wavePoints.map((wp: any, idx: number) => ({
+                 time: wp.time,
+                 price: wp.price,
+                 label: idx.toString()
+              }));
+         } else if (aiResult.trend !== 'neutral' && algoResult && algoResult.waves) {
+              // Only fallback to math engine waves IF AI determined a trend exists and just forgot points
               aiResult.wavePoints = [
                   { time: algoResult.waves.start.time, price: algoResult.waves.start.price, label: '0' },
                   { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price, label: '1' },
