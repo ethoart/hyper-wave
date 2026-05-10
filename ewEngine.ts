@@ -197,8 +197,10 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
         let suggestedEntry = w4;
         let isInvalidated = false;
         
-        // Check if trade is already invalidated (hit target or stoploss)
-        if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
+        // If price is already moving from W4 towards target, entry is current price
+        if (currentPrice > w4 && currentPrice < finalTarget) {
+            suggestedEntry = currentPrice;
+        } else if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }
         
@@ -289,8 +291,10 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
         let suggestedEntry = w4;
         let isInvalidated = false;
         
-        // Check if trade is already invalidated (hit target or stoploss)
-        if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
+        // If price is already moving from W4 towards target, entry is current price
+        if (currentPrice < w4 && currentPrice > finalTarget) {
+            suggestedEntry = currentPrice;
+        } else if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }
 

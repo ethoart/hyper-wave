@@ -297,16 +297,36 @@ export function Dashboard() {
     try {
       const res = await axios.get('/api/analysis');
       setAnalyses(res.data);
-      if (res.data.length > 0) {
-        // If we want to initially load the first active analysis
-        // setActiveAnalysis(res.data[0]);
-        // setSymbol(res.data[0].symbol);
-        // setChartInterval(res.data[0].timeframe);
-      }
     } catch (err) {
       console.error(err);
     }
   };
+
+  const [globalAlerts, setGlobalAlerts] = useState<any[]>([]);
+
+  const fetchGlobalAlerts = async () => {
+    try {
+      const res = await axios.get('/api/alerts');
+      if (res.data && res.data.length > 0) {
+         // Notify if new alert
+         const newAlerts = res.data.filter((newAlert: any) => !globalAlerts.find(a => a.id === newAlert.id));
+         if (newAlerts.length > 0) {
+            newAlerts.forEach((na: any) => addNotification(`🚀 Setup: ${na.symbol} [${na.trend}] near ${na.entry}`));
+            setGlobalAlerts(res.data);
+         } else if (globalAlerts.length === 0) {
+            setGlobalAlerts(res.data);
+         }
+      }
+    } catch(e) {
+      console.warn("Failed to fetch alerts", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalAlerts();
+    const interval = setInterval(fetchGlobalAlerts, 60000); // 1 minute
+    return () => clearInterval(interval);
+  }, [globalAlerts]);
 
   const fetchChartData = async () => {
     setLoadingConfig(true);

@@ -416,7 +416,7 @@ async function startServer() {
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
           {
-            "analysisText": "Your expert synthesis: State the main pattern driving this trade (e.g., 'Cup and Handle breakout', 'Rising Wedge setup', 'Elliott Wave 4 pullback'). Include the final trade rationale. EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
+            "analysisText": "Your deep expert synthesis: Act as a pro hedge fund analyst. Write a concise, 2-paragraph technical report. Mention RSI/MACD convergences if logically inferred. State the primary driving pattern (e.g., 'Cup and Handle breakout', 'Rising Wedge setup', 'Elliott Wave 4 pullback'). Justify exactly why the current price action validates the entry, target, and stop-loss levels.",
             "winRate": "<percentage>%",
             "entryPoint": <number>,
             "exitPoint": <number>,
@@ -432,7 +432,7 @@ async function startServer() {
         `;
 
         const aiResponse = await ai.models.generateContent({
-          model: 'gemini-3.1-pro-preview',
+          model: 'gemini-3-flash-preview',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -551,6 +551,84 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // Global Alerts (Auto-Scanner)
+  let recentAlerts: any[] = [];
+  app.get('/api/alerts', (req, res) => {
+    res.json(recentAlerts);
+  });
+
+  // Background Auto-Scanner that scans market top pairs periodically
+  let isScanning = false;
+  const runAutoScanner = async () => {
+    if (isScanning) return;
+    isScanning = true;
+    try {
+      console.log('Running background Auto-Scanner...');
+      const response = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr');
+      const data = response.data.filter((d: any) => 
+        d.symbol.endsWith('USDT') && !['USDC', 'FDUSD', 'TUSD', 'BUSD', 'EUR'].some(s => d.symbol.includes(s)) && parseFloat(d.quoteVolume) > 1000000
+      );
+      data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
+      
+      const topPairs = data.slice(0, 10);
+      let foundAlerts = [];
+      
+      for (const pair of topPairs) {
+         try {
+           const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=1h&limit=200`);
+           const chartData = klinesRes.data.map((d: any) => ({
+             time: d[0],
+             open: parseFloat(d[1]),
+             high: parseFloat(d[2]),
+             low: parseFloat(d[3]),
+             close: parseFloat(d[4]),
+             volume: parseFloat(d[5]),
+           }));
+           
+           const algoResult = analyzeElliottWaves(chartData);
+           if (algoResult && algoResult.trend !== 'neutral') {
+              const currentPrice = chartData[chartData.length - 1].close;
+              // Check if it's decently actionable (entry within 2% of current price)
+              const entryDiff = Math.abs(algoResult.entry - currentPrice) / currentPrice;
+              if (entryDiff < 0.02) {
+                 foundAlerts.push({
+                   id: `${pair.symbol}_${algoResult.trend}`,
+                   symbol: pair.symbol,
+                   timestamp: Date.now(),
+                   trend: algoResult.trend,
+                   entry: algoResult.entry,
+                   target: algoResult.target,
+                   stopLoss: algoResult.stopLoss,
+                   reasoning: algoResult.reasoning,
+                   currentPrice: currentPrice
+                 });
+                 console.log(`[Auto-Scan] Found actionable trade for ${pair.symbol}`);
+              }
+           }
+           // Sleep to avoid ratelimits
+           await new Promise(r => setTimeout(r, 500));
+         } catch(e) {
+           console.warn(`[Auto-Scan] error scanning ${pair.symbol}`, (e as any).message);
+         }
+      }
+      
+      if (foundAlerts.length > 0) {
+         const newAlertIds = new Set(foundAlerts.map(a => a.id));
+         const filteredOld = recentAlerts.filter(a => !newAlertIds.has(a.id));
+         recentAlerts = [...foundAlerts, ...filteredOld].slice(0, 20); // keep last 20
+      }
+      
+    } catch(err) {
+       console.error('[Auto-Scan] failed', err);
+    } finally {
+       isScanning = false;
+    }
+  };
+  
+  // Run every 2 minutes
+  setInterval(runAutoScanner, 2 * 60 * 1000);
+  setTimeout(runAutoScanner, 10000); // Initial run after 10s
 
   // -----------------------------------------------------
   // Vite Middleware for Frontend Serving
