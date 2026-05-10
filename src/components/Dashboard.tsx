@@ -217,14 +217,19 @@ export function Dashboard() {
     
     let reconnectAttempts = 0;
     
+    // We'll track two websockets to support both Futures and Spot symbols.
+    // Whoever replies wins!
+    let wsFutures: WebSocket | null = null;
+    let wsSpot: WebSocket | null = null;
+    
     const connectWs = () => {
-      // Use Binance Futures stream for perpetual charts
-      const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      const futuresWsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      const spotWsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+      
+      wsFutures = new WebSocket(futuresWsUrl);
+      wsSpot = new WebSocket(spotWsUrl);
 
-      ws.onopen = () => console.log('WS Connected:', wsUrl);
-      ws.onmessage = (event) => {
+      const handleMessage = (event: MessageEvent) => {
         const message = JSON.parse(event.data);
         if (message.e === 'kline') {
           const kline = message.k;
@@ -261,22 +266,30 @@ export function Dashboard() {
         }
       };
 
-      ws.onclose = () => {
+      wsFutures.onmessage = handleMessage;
+      wsSpot.onmessage = handleMessage;
+
+      wsFutures.onclose = () => {
         if (reconnectAttempts < 5) {
           reconnectAttempts++;
           setTimeout(connectWs, 2000 * reconnectAttempts);
         }
       };
+      // Ignore spot close event to prevent duplicate reconnect loops.
+      wsSpot.onclose = () => {};
 
-      ws.onerror = (err) => {
-         console.error('WebSocket Error:', err);
+      wsFutures.onerror = (err) => {
+         console.error('Futures WebSocket Error:', err);
       };
+      
+      wsRef.current = wsFutures; // for standard reference
     };
     
     connectWs();
 
     return () => {
-       if (wsRef.current) wsRef.current.close();
+       if (wsFutures) wsFutures.close();
+       if (wsSpot) wsSpot.close();
     };
   }, [symbol, interval]);
 
