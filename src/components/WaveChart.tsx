@@ -362,7 +362,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       }
     });
 
-    if (activeTool === 'pen' || activeTool === 'trend') {
+    const drawingTools = ['pen', 'trend', 'fibonacci', 'parallel', 'rectangle', 'measure'];
+    if (drawingTools.includes(activeTool as string)) {
       chart.applyOptions({
         handleScroll: false,
         handleScale: false,
@@ -383,8 +384,6 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         });
       }
 
-      // If switching to trend, we typically want to clear previous or just let it continue
-      // For now, let's keep all user drawings on the same series or let them click to draw new ones
       const handleClick = (param: any) => {
         if (!param.point || !param.time || !candlestickSeriesRef.current || !userSeriesRef.current) return;
         
@@ -392,11 +391,10 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         const price = candlestickSeriesRef.current.coordinateToPrice(y as any);
         
         if (price !== null) {
-          if (activeTool === 'trend') {
-             // For a simple trendline, just collect the last 2 points max? Or reset if > 2?
-             // Let's just reset if they click a 3rd time, to simulate drawing a new line
+          if (activeTool !== 'pen') {
              if (userDrawings.current.length >= 2) {
                 userDrawings.current = [];
+                userSeriesRef.current.setMarkers([]);
              }
           }
           
@@ -409,6 +407,33 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
           userDrawings.current.sort((a, b) => a.time - b.time);
           
           userSeriesRef.current.setData(userDrawings.current as any[]);
+          
+          if (activeTool === 'measure' && userDrawings.current.length === 2) {
+             const p1 = userDrawings.current[0];
+             const p2 = userDrawings.current[1];
+             const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
+             userSeriesRef.current.setMarkers([{
+                 time: p2.time,
+                 position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+                 color: pct.startsWith('-') ? '#f23645' : '#089981',
+                 shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
+                 text: `${pct}%`,
+             }]);
+          } else if (activeTool === 'fibonacci' && userDrawings.current.length === 2) {
+             const p1 = userDrawings.current[0];
+             const p2 = userDrawings.current[1];
+             const diff = p2.value - p1.value;
+             const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+             // Set markers for fib levels
+             const markers = levels.map(l => ({
+                 time: p1.time,
+                 position: 'inBar' as any,
+                 color: '#f59e0b',
+                 shape: 'circle' as any,
+                 text: `Fib ${l} / ${(p1.value + diff * l).toFixed(2)}`
+             }));
+             userSeriesRef.current.setMarkers(markers);
+          }
         }
       };
 
@@ -439,10 +464,10 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
   return (
     <div className="w-full h-full flex flex-col relative">
-      <div className="absolute top-2 left-2 z-10 flex gap-2">
-        <button onClick={() => setShowSMA(!showSMA)} className={`text-[10px] px-2 py-1 rounded bg-[#131722] border ${showSMA ? 'border-[#f59e0b] text-[#f59e0b]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors`}>SMA 20</button>
-        <button onClick={() => setShowRSI(!showRSI)} className={`text-[10px] px-2 py-1 rounded bg-[#131722] border ${showRSI ? 'border-[#8b5cf6] text-[#8b5cf6]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors`}>RSI 14</button>
-        <button onClick={() => setShowBB(!showBB)} className={`text-[10px] px-2 py-1 rounded bg-[#131722] border ${showBB ? 'border-[#2962ff] text-[#2962ff]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors`}>BB</button>
+      <div className="absolute top-12 left-2 z-[9] flex gap-2 pointer-events-none">
+        <button onClick={() => setShowSMA(!showSMA)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showSMA ? 'border-[#f59e0b] text-[#f59e0b]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>SMA 20</button>
+        <button onClick={() => setShowRSI(!showRSI)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showRSI ? 'border-[#8b5cf6] text-[#8b5cf6]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>RSI 14</button>
+        <button onClick={() => setShowBB(!showBB)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showBB ? 'border-[#2962ff] text-[#2962ff]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>BB</button>
       </div>
       <div className="w-full flex-1 relative min-h-0" ref={chartContainerRef} />
       {showRSI && (

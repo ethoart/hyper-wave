@@ -7,7 +7,8 @@ import { MiniChart } from './MiniChart';
 import {
   MousePointer2, Crosshair, PenTool, TrendingUp, Search,
   PlayCircle, Loader2, List, Activity, Settings, LogOut, Code,
-  Bell, BellRing, DollarSign, Send, Menu, X, PlusSquare
+  Bell, BellRing, DollarSign, Send, Menu, X, PlusSquare,
+  AlignJustify, Square, Ruler, Spline
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ethers } from 'ethers';
@@ -848,7 +849,11 @@ export function Dashboard() {
              )}
            </div>
 
-           <button onClick={() => setActiveTool('trend')} className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'trend' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><TrendingUp className="w-5 h-5" /></button>
+           <button onClick={() => setActiveTool('trend')} title="Trend Line" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'trend' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><TrendingUp className="w-5 h-5" /></button>
+           <button onClick={() => setActiveTool('fibonacci')} title="Fibonacci Retracement" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'fibonacci' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><AlignJustify className="w-5 h-5" /></button>
+           <button onClick={() => setActiveTool('parallel')} title="Parallel Channel" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'parallel' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Spline className="w-5 h-5" /></button>
+           <button onClick={() => setActiveTool('rectangle')} title="Rectangle" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'rectangle' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Square className="w-5 h-5" /></button>
+           <button onClick={() => setActiveTool('measure')} title="Measure & Percentage" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'measure' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Ruler className="w-5 h-5" /></button>
            
            <Dialog>
              <DialogTrigger className="p-1.5 flex-shrink-0 md:p-2 ml-auto mt-0 md:ml-0 md:mt-auto md:mb-4 text-[#787b86] hover:text-[#d1d4dc]">
@@ -880,7 +885,7 @@ plot(close)"
         <main className="flex-1 relative bg-[#000000] flex flex-col min-h-0 w-full overflow-y-auto">
           {chartData.length > 0 ? (
             <div className={`flex-1 w-full relative grid gap-1 p-1 bg-[#131722] ${additionalCharts.length > 0 ? (additionalCharts.length === 1 ? 'grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1' : additionalCharts.length === 2 ? 'grid-cols-1 grid-rows-3 md:grid-cols-2 md:grid-rows-2' : 'grid-cols-2 md:grid-cols-2') : 'grid-cols-1'}`}>
-              <div className="relative border border-[#2a2e39] flex flex-col min-h-[400px]">
+              <div className="relative border border-[#2a2e39] flex flex-col min-h-[400px] resize-y overflow-hidden">
                 <div className="absolute top-2 left-2 z-10 flex gap-2 pointer-events-none">
                   <div className="bg-[#1e222d]/80 backdrop-blur px-2 py-1 rounded text-xs font-bold text-white border border-[#2a2e39] flex items-center gap-2 pointer-events-auto shadow-md">
                     <span className="text-[#2962ff]">{symbol}</span>
@@ -904,11 +909,11 @@ plot(close)"
                 />
               </div>
               {additionalCharts.map((c, i) => (
-                <div key={i} className="relative border border-[#2a2e39] flex flex-col min-h-[300px]">
+                <div key={i} className="relative border border-[#2a2e39] flex flex-col min-h-[300px] resize overflow-hidden">
                   <MiniChart 
                      symbol={c.symbol} 
                      interval={c.interval} 
-                     activeTool={activeTool} 
+                     activeTool={'crosshair'} 
                      onClose={() => setAdditionalCharts(additionalCharts.filter((_, idx) => idx !== i))}
                      onChange={(newSym, newInt) => {
                        const updated = [...additionalCharts];
