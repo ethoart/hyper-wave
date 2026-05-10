@@ -334,133 +334,53 @@ export function Dashboard() {
     setGenerating(true);
     try {
       const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
-      
-      // Analyze mathematically locally instead of sending to server
-      // We import analyzeElliottWaves dynamically or we should have it imported at the top
-      const analyzeElliottWaves = (await import('../../ewEngine')).analyzeElliottWaves;
       const dataToAnalyze = chartData.slice(-200);
+
+      // Analyze mathematically locally for backup, or send to server to do both
+      const analyzeElliottWaves = (await import('../../ewEngine')).analyzeElliottWaves;
       const algoResult = analyzeElliottWaves(dataToAnalyze, safeInterval);
       
-      const mathOutputText = algoResult 
-        ? `Algorithmic Math Engine found a ${algoResult.trend} Wave 4 setup. 
-           Calculated Entry Point: ${algoResult.entry}, Target: ${algoResult.target}, Invalidation Stop Loss: ${algoResult.stopLoss}. 
-           Pivots Found: Start={time: ${algoResult.waves.start.time}, price: ${algoResult.waves.start.price}}, ...
-           Reasoning: ${algoResult.reasoning}`
-        : `Algorithmic Math Engine did not find a strict 100% textbook 5-wave structure matching constraints. Please provide a best-effort structural analysis based on patterns.`;
-
       let aiResult;
+      
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const prompt = `
-          You are a highly skilled professional crypto trader and quantitative analyst specializing in Elliott Wave Theory.
-          
-          We have an algorithmic pure-math engine that scans for pivot points and evaluates strict Elliott Wave mathematical constraints & Fibonacci relationships.
-          Math Engine Output for Context: ${mathOutputText}
-          
-          Recent Candlestick Data Snapshop for ${symbol} on ${safeInterval} TF. The LAST candle is the current active price:
-          ${JSON.stringify(dataToAnalyze.slice(-25))}
-          
-          Your task is to synthesize the math engine's output with your AI capability.
-          CRITICAL: Look at the CURRENT price (the last candle). If the math engine's suggested entry point has already been MISSED (the price moved significantly past it), you MUST calculate a NEW actionable trade setup based on current price action (like a continuation breakout, a pullback, etc.). Do not give an old, un-tradable entry.
-          Confirm or adjust the Entry, Target, and Stop Loss points.
-          Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
-          
-          You must return the result as a valid JSON object matching this schema exactly, just raw JSON (no markdown):
-          {
-            "analysisText": "Your expert synthesis: How does the raw data support the engine's finding? What's the final trade rationale? EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
-            "winRate": "<percentage>%",
-            "entryPoint": <number>,
-            "exitPoint": <number>,
-            "stopLoss": <number>,
-            "trend": "bullish" | "bearish" | "neutral",
-            "wavePoints": [ {"time": <number exact same from time in provided array>, "price": <number>}, ...]
-          }
-        `;
-
-        const aiResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
-          contents: prompt,
-          config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                  type: "object",
-                  properties: {
-                      analysisText: { type: "string" },
-                      winRate: { type: "string" },
-                      entryPoint: { type: "number" },
-                      exitPoint: { type: "number" },
-                      stopLoss: { type: "number" },
-                      trend: { type: "string", enum: ["bullish", "bearish", "neutral"] },
-                      wavePoints: {
-                          type: "array",
-                          items: {
-                              type: "object",
-                              properties: {
-                                  time: { type: "number" },
-                                  price: { type: "number" }
-                              },
-                              required: ["time", "price"]
-                          }
-                      }
-                  },
-                  required: ["analysisText", "winRate", "entryPoint", "exitPoint", "stopLoss", "trend", "wavePoints"]
-              }
-          }
-        });
-        
-        let text = aiResponse.text?.trim() || "{}";
-        text = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-        if (text.startsWith('```')) {
-            text = text.replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
-        }
-        
-        try {
-            aiResult = JSON.parse(text);
-        } catch (parseError) {
-            console.warn("MimeType JSON parsing failed. Attempting dirty string fix...", text);
-            // sometimes the LLM accidentally leaves a trailing comma or unescaped quote in 'analysisText'.
-            // fall back to purely relying on math engine data but preserving some fields if we just error out.
-            throw new Error("JSON parsing failed due to malformed output from Gemini. " + (parseError as Error).message);
-        }
-        
-        // Force math engine wave points to ensure labels are preserved
-        if (algoResult && algoResult.waves) {
-             aiResult.wavePoints = [
-                 { time: algoResult.waves.start.time, price: algoResult.waves.start.price, label: '0' },
-                 { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price, label: '1' },
-                 { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price, label: '2' },
-                 { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price, label: '3' },
-                 { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price, label: '4' }
-             ];
-             // DO NOT override AI's smart entry/exit/stop targets with the outdated algo results!
-        }
-      } catch (aiError: any) {
-        console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError);
-        
-        let errorMsg = aiError.message || "Unknown error";
-        if (errorMsg.includes("Quota") || aiError.status === 429) {
-           errorMsg = "The AI service free-tier quota was exceeded. Please try again in 1 minute.";
-        } else if (errorMsg.includes("503") || aiError.status === 503 || errorMsg.includes("high demand")) {
-           errorMsg = "The AI model is overloaded with high demand. Please try again later.";
-        } else if (errorMsg.includes("scopes")) {
-           errorMsg = "Invalid API key or permissions.";
-        }
-        
-        aiResult = {
-          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
-          winRate: algoResult ? "70%" : "N/A",
-          entryPoint: algoResult?.entry || dataToAnalyze[dataToAnalyze.length - 1].close,
-          exitPoint: algoResult?.target || dataToAnalyze[dataToAnalyze.length - 1].close * 1.05,
-          stopLoss: algoResult?.stopLoss || dataToAnalyze[dataToAnalyze.length - 1].close * 0.95,
-          trend: algoResult?.trend || 'neutral',
-          wavePoints: algoResult ? [
-            { time: algoResult.waves.start.time, price: algoResult.waves.start.price },
-            { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price },
-            { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price },
-            { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price },
-            { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price }
-          ] : []
-        };
+         // Use the backend server to perform the Gemini API call safely
+         // utilizing the backend's process.env.GEMINI_API_KEY
+         const res = await axios.post('/api/analysis/generate', {
+             symbol,
+             interval: safeInterval,
+             data: dataToAnalyze
+         });
+         aiResult = res.data;
+         
+         // Force math engine wave points to ensure labels are preserved
+         if (algoResult && algoResult.waves) {
+              aiResult.wavePoints = [
+                  { time: algoResult.waves.start.time, price: algoResult.waves.start.price, label: '0' },
+                  { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price, label: '1' },
+                  { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price, label: '2' },
+                  { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price, label: '3' },
+                  { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price, label: '4' }
+              ];
+         }
+      } catch (err: any) {
+         console.error("AI connection failed via backend. Falling back to math engine output.", err);
+         const errorMsg = err.response?.data?.error || err.message || "Unknown error";
+         
+         aiResult = {
+           analysisText: `⚠️ AI connection failed (Server Error): ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
+           winRate: algoResult ? "70%" : "N/A",
+           entryPoint: algoResult?.entry || dataToAnalyze[dataToAnalyze.length - 1].close,
+           exitPoint: algoResult?.target || dataToAnalyze[dataToAnalyze.length - 1].close * 1.05,
+           stopLoss: algoResult?.stopLoss || dataToAnalyze[dataToAnalyze.length - 1].close * 0.95,
+           trend: algoResult?.trend || 'neutral',
+           wavePoints: algoResult ? [
+             { time: algoResult.waves.start.time, price: algoResult.waves.start.price },
+             { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price },
+             { time: algoResult.waves.w2.time, price: algoResult.waves.w2.price },
+             { time: algoResult.waves.w3.time, price: algoResult.waves.w3.price },
+             { time: algoResult.waves.w4.time, price: algoResult.waves.w4.price }
+           ] : []
+         };
       }
 
       // Format for saving locally (fake persistence in UI without db for now to be fast)

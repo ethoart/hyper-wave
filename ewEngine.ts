@@ -191,37 +191,44 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
         }
         
         let suggestedEntry = w4;
+        let isInvalidated = false;
+        
         // If price is already moving from W4 towards target, entry is current price
         if (currentPrice > w4 && currentPrice < finalTarget) {
             suggestedEntry = currentPrice;
+        } else if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
+            isInvalidated = true; // Trade is over or failed
         }
         
-        const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
-
-        bestSetup = {
-          score,
-          trend: 'bullish',
-          waves: { 
-            start: { price: p0.price, time: p0.time, label: '0' }, 
-            w1: { price: p1.price, time: p1.time, label: '1' }, 
-            w2: { price: p2.price, time: p2.time, label: '2' }, 
-            w3: { price: p3.price, time: p3.time, label: '3' }, 
-            w4: { price: p4.price, time: p4.time, label: '4' } 
-          },
-          channelPoints: [
-            [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Bottom trendline
-            [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Top trendline projected
-          ],
-          flagPoints: [
-             [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
-          ],
-          entry: suggestedEntry,
-          stopLoss: validStopLoss, // Invalidation line
-          target: finalTarget,
-          tradeStyle,
-          gainPct,
-          reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] [BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry at ${suggestedEntry} (Wave 4 low was ${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
-        };
+        // Only accept if not invalidated securely
+        if (!isInvalidated) {
+            const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
+    
+            bestSetup = {
+              score,
+              trend: 'bullish',
+              waves: { 
+                start: { price: p0.price, time: p0.time, label: '0' }, 
+                w1: { price: p1.price, time: p1.time, label: '1' }, 
+                w2: { price: p2.price, time: p2.time, label: '2' }, 
+                w3: { price: p3.price, time: p3.time, label: '3' }, 
+                w4: { price: p4.price, time: p4.time, label: '4' } 
+              },
+              channelPoints: [
+                [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Bottom trendline
+                [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Top trendline projected
+              ],
+              flagPoints: [
+                 [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
+              ],
+              entry: suggestedEntry,
+              stopLoss: validStopLoss, // Invalidation line
+              target: finalTarget,
+              tradeStyle,
+              gainPct,
+              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] [BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry at ${suggestedEntry} (Wave 4 low was ${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
+            };
+        }
       }
     }
     
@@ -274,37 +281,44 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
         }
         
         let suggestedEntry = w4;
+        let isInvalidated = false;
+        
         // If price is already moving from W4 towards target, entry is current price
         if (currentPrice < w4 && currentPrice > finalTarget) {
             suggestedEntry = currentPrice;
+        } else if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
+            isInvalidated = true; // Trade is over or failed
         }
 
-        const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
-
-        bestSetup = {
-          score,
-          trend: 'bearish',
-          waves: { 
-            start: { price: p0.price, time: p0.time, label: '0' }, 
-            w1: { price: p1.price, time: p1.time, label: '1' }, 
-            w2: { price: p2.price, time: p2.time, label: '2' }, 
-            w3: { price: p3.price, time: p3.time, label: '3' }, 
-            w4: { price: p4.price, time: p4.time, label: '4' } 
-          },
-          channelPoints: [
-            [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Top trendline
-            [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Bottom trendline projected
-          ],
-          flagPoints: [
-             [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
-          ],
-          entry: suggestedEntry,
-          stopLoss: validStopLoss,
-          target: finalTarget,
-          tradeStyle,
-          gainPct,
-          reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] [BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry at ${suggestedEntry} (Wave 4 high was ${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
-        };
+        // Only accept if not invalidated securely
+        if (!isInvalidated) {
+            const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
+    
+            bestSetup = {
+              score,
+              trend: 'bearish',
+              waves: { 
+                start: { price: p0.price, time: p0.time, label: '0' }, 
+                w1: { price: p1.price, time: p1.time, label: '1' }, 
+                w2: { price: p2.price, time: p2.time, label: '2' }, 
+                w3: { price: p3.price, time: p3.time, label: '3' }, 
+                w4: { price: p4.price, time: p4.time, label: '4' } 
+              },
+              channelPoints: [
+                [ { time: p2.time, price: p2.price }, { time: p4.time, price: p4.price } ], // Top trendline
+                [ { time: p1.time, price: p1.price }, { time: p3.time, price: p3.price }, { time: p4.time, price: p3.price + ((p3.price - p1.price) / (p3.index - p1.index)) * (p4.index - p3.index) } ] // Bottom trendline projected
+              ],
+              flagPoints: [
+                 [ { time: p3.time, price: p3.price }, { time: p4.time, price: p4.price } ] // Simple representation of the wave 4 pullback
+              ],
+              entry: suggestedEntry,
+              stopLoss: validStopLoss,
+              target: finalTarget,
+              tradeStyle,
+              gainPct,
+              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] [BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry at ${suggestedEntry} (Wave 4 high was ${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
+            };
+        }
       }
     }
   }

@@ -409,9 +409,10 @@ async function startServer() {
           
           Your task is to synthesize the math engine's output with your AI capability.
           Look at the LAST FEW CANDLES in the provided data. This is the current active price.
-          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it), you MUST calculate a NEW actionable trade setup based on the CURRENT price action (e.g. a continuation breakout, a pullback level, or reversal). Do not give an old, un-tradable entry.
-          Read the candlesticks, confirm or adjust the mathematical Entry, Target, and Stop Loss points based on local support/resistance or exhaustion patterns. 
-          If the engine found no setup, find the closest structural opportunity or give a neutral standing. Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%").
+          CRITICAL: If the algorithmic engine explicitly states it "did not find a strict 100% textbook 5-wave structure", you MUST set the "trend" to "neutral" and explain that no mathematically valid trade exists.
+          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it and already hit target), you MUST also set the "trend" to "neutral" and state the trade is invalidated.
+          However, if a valid setup exists and the entry is still actionable (or you can calculate a NEW actionable pullback entry), confirm or adjust the Entry, Target, and Stop Loss points based on local support/resistance.
+          Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%"). If neutral, put "N/A".
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
           {
@@ -482,15 +483,26 @@ async function startServer() {
            if (result.stopLoss <= result.entryPoint) result.stopLoss = result.entryPoint * 1.05;
         }
       } catch (aiError: any) {
-        console.warn("AI generation failed or had incorrect scopes. Falling back to math engine output.", aiError.message);
+        console.warn("AI generation failed. Falling back to math engine output.", aiError.message);
+        
+        let errorMsg = aiError.message || "Unknown error";
+        if (errorMsg.includes("Quota") || aiError.status === 429) {
+           errorMsg = "The AI service free-tier quota was exceeded. Please try again in 1 minute.";
+        } else if (errorMsg.includes("503") || aiError.status === 503 || errorMsg.includes("high demand") || errorMsg.includes("overloaded")) {
+           errorMsg = "The AI model is overloaded with high demand. Please try again later.";
+        } else if (errorMsg.includes("scopes")) {
+           errorMsg = "Invalid API key or permissions.";
+        } else if (errorMsg.includes("JSON") || errorMsg.includes("Unexpected token")) {
+           errorMsg = "The AI returned malformed logic JSON. Utilizing math engine backup.";
+        }
         
         result = {
-          analysisText: `⚠️ AI connection failed (API Key missing or invalid permissions).\n\nShowing pure algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
+          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
           winRate: algoResult ? "70%" : "N/A",
           entryPoint: algoResult?.entry || data[data.length - 1].close,
-          exitPoint: algoResult?.target || data[data.length - 1].close * 1.05,
-          stopLoss: algoResult?.stopLoss || data[data.length - 1].close * 0.95,
-          trend: algoResult?.trend || (data[data.length - 1].close > data[Math.max(0, data.length - 5)].close ? 'bullish' : 'bearish'),
+          exitPoint: algoResult?.target || data[data.length - 1].close,
+          stopLoss: algoResult?.stopLoss || data[data.length - 1].close,
+          trend: algoResult?.trend || 'neutral',
           wavePoints: algoResult ? [
             { time: algoResult.waves.start.time, price: algoResult.waves.start.price },
             { time: algoResult.waves.w1.time, price: algoResult.waves.w1.price },
