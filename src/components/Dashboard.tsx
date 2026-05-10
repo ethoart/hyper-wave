@@ -270,20 +270,6 @@ export function Dashboard() {
                       window.initialTickDone = true;
                    }
                    setLiveCandle(liveCandle);
-                   setChartData((prev) => {
-                     const newData = [...prev];
-                     const lastIdx = newData.length - 1;
-                     if (lastIdx >= 0) {
-                        const existingTime = newData[lastIdx].time;
-                        let klineTime = d.time;
-                        if (existingTime === klineTime || (existingTime * 1000) === klineTime) {
-                           newData[lastIdx] = { ...liveCandle, time: existingTime }; 
-                        } else {
-                           newData.push({ ...liveCandle, time: existingTime });
-                        }
-                     }
-                     return newData;
-                   });
                }
            } catch(e) { }
            isPolling = false;
@@ -316,22 +302,6 @@ export function Dashboard() {
           }
           setLiveCandle(liveCandle);
           setTickCount(c => c + 1);
-          
-          if (kline.x) { // if candle is closed, we can fetch new data to update indicators or just append
-             // We can append to chartData safely
-             setChartData(prev => {
-                const newData = [...prev];
-                const lastIdx = newData.length - 1;
-                if (lastIdx >= 0) {
-                   if (newData[lastIdx].time === kline.t) {
-                      newData[lastIdx] = { ...liveCandle, time: kline.t }; // use original ms time
-                   } else {
-                      newData.push({ ...liveCandle, time: kline.t });
-                   }
-                }
-                return newData;
-             });
-          }
         }
       };
 

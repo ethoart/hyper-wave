@@ -29,6 +29,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const userSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const auxiliarySeriesRef = useRef<ISeriesApi<"Line">[]>([]);
+  const targetPriceLinesRef = useRef<any[]>([]);
 
   useEffect(() => {
     if (liveCandle && chartRef.current && candlestickSeriesRef.current) {
@@ -338,7 +340,19 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
        userDrawings.current = [];
        if (userSeriesRef.current) {
           userSeriesRef.current.setData([]);
+          userSeriesRef.current.setMarkers([]);
        }
+       if (candlestickSeriesRef.current) {
+         targetPriceLinesRef.current.forEach(line => {
+             try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
+         });
+       }
+       targetPriceLinesRef.current = [];
+
+       auxiliarySeriesRef.current.forEach(s => {
+           try { chartRef.current?.removeSeries(s); } catch (e) {}
+       });
+       auxiliarySeriesRef.current = [];
     }
   }, [clearDrawings]);
 
@@ -392,9 +406,19 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         
         if (price !== null) {
           if (activeTool !== 'pen') {
-             if (userDrawings.current.length >= 2) {
+             let maxPoints = 2;
+             if (activeTool === 'parallel') maxPoints = 3;
+             if (userDrawings.current.length >= maxPoints) {
                 userDrawings.current = [];
                 userSeriesRef.current.setMarkers([]);
+                auxiliarySeriesRef.current.forEach(s => {
+                   try { chartRef.current?.removeSeries(s); } catch (e) {}
+                });
+                auxiliarySeriesRef.current = [];
+                targetPriceLinesRef.current.forEach(line => {
+                   try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
+                });
+                targetPriceLinesRef.current = [];
              }
           }
           
@@ -417,22 +441,57 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
                  position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
                  color: pct.startsWith('-') ? '#f23645' : '#089981',
                  shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
-                 text: `${pct}%`,
+                 text: `${pct}% / ${p2.value.toFixed(2)}`,
              }]);
           } else if (activeTool === 'fibonacci' && userDrawings.current.length === 2) {
              const p1 = userDrawings.current[0];
              const p2 = userDrawings.current[1];
              const diff = p2.value - p1.value;
-             const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
-             // Set markers for fib levels
-             const markers = levels.map(l => ({
-                 time: p1.time,
-                 position: 'inBar' as any,
-                 color: '#f59e0b',
-                 shape: 'circle' as any,
-                 text: `Fib ${l} / ${(p1.value + diff * l).toFixed(2)}`
-             }));
-             userSeriesRef.current.setMarkers(markers);
+             const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
+             levels.forEach(l => {
+                 const levelPrice = p1.value + diff * l;
+                 if (candlestickSeriesRef.current) {
+                     const pl = candlestickSeriesRef.current.createPriceLine({
+                         price: levelPrice,
+                         color: drawingColor,
+                         lineWidth: 1,
+                         lineStyle: 2,
+                         axisLabelVisible: true,
+                         title: `Fib ${l}`
+                     });
+                     targetPriceLinesRef.current.push(pl);
+                 }
+             });
+          } else if (activeTool === 'rectangle' && userDrawings.current.length === 2) {
+             const p1 = userDrawings.current[0];
+             const p2 = userDrawings.current[1];
+             const topSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+             const bottomSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+             topSeries.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }]);
+             bottomSeries.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }]);
+             auxiliarySeriesRef.current.push(topSeries, bottomSeries);
+             
+             userSeriesRef.current.setMarkers([
+                { time: p1.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
+                { time: p2.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
+             ]);
+             userSeriesRef.current.setData([]);
+          } else if (activeTool === 'parallel' && userDrawings.current.length === 3) {
+             const p1 = userDrawings.current[0];
+             const p2 = userDrawings.current[1];
+             const p3 = userDrawings.current[2];
+             
+             const slope = (p2.value - p1.value) / (p2.time - p1.time);
+             const newIntercept = p3.value - slope * p3.time;
+             
+             const parallelLine = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+             parallelLine.setData([
+                { time: p1.time, value: slope * p1.time + newIntercept },
+                { time: p2.time, value: slope * p2.time + newIntercept }
+             ]);
+             auxiliarySeriesRef.current.push(parallelLine);
+             
+             userSeriesRef.current.setData([p1, p2]);
           }
         }
       };
@@ -446,7 +505,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       // Re-enable scrolling using the mouse
       chart.applyOptions({
         handleScroll: {
-          mouseWheel: true,
+          mouseWheel: false,
           pressedMouseMove: true,
           horzTouchDrag: true,
           vertTouchDrag: true,

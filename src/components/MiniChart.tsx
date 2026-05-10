@@ -58,20 +58,6 @@ export function MiniChart({ symbol, interval, activeTool, onClose, onChange }: {
                      volume: parseFloat(d.volume)
                    };
                    setLiveCandle(liveCdl);
-                   setData(prev => {
-                     const newData = [...prev];
-                     const lastIdx = newData.length - 1;
-                     if (lastIdx >= 0) {
-                        const existingTime = newData[lastIdx].time;
-                        let klineTime = d.time;
-                        if (existingTime === klineTime || (existingTime * 1000) === klineTime) {
-                           newData[lastIdx] = { ...liveCdl, time: existingTime }; 
-                        } else {
-                           newData.push({ ...liveCdl, time: existingTime });
-                        }
-                     }
-                     return newData;
-                   });
                }
            } catch(e) { }
            isPolling = false;
@@ -99,21 +85,6 @@ export function MiniChart({ symbol, interval, activeTool, onClose, onChange }: {
              volume: parseFloat(kline.v),
            };
            setLiveCandle(liveCdl);
-           
-           if (kline.x) {
-              setData(prev => {
-                 const newData = [...prev];
-                 const lastIdx = newData.length - 1;
-                 if (lastIdx >= 0) {
-                    if (newData[lastIdx].time === kline.t) {
-                       newData[lastIdx] = { ...liveCdl, time: kline.t };
-                    } else {
-                       newData.push({ ...liveCdl, time: kline.t });
-                    }
-                 }
-                 return newData;
-              });
-           }
          }
        };
 
