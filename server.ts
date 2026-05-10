@@ -61,9 +61,11 @@ const tradeSignalSchema = new mongoose.Schema({
   entry: Number,
   target: Number,
   stopLoss: Number,
+  amount: { type: Number, default: 10 }, // Auto Paper Trade size: $10
   setupData: mongoose.Schema.Types.Mixed, // algorithmic context
   status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated'], default: 'pending' },
   pnlPercent: Number,
+  realizedPnl: Number,
   resolvedAt: Date
 });
 const TradeSignal = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
@@ -294,6 +296,41 @@ async function startServer() {
     } catch (err: any) {
       console.error(err.response?.data || err.message);
       res.status(500).json({ error: 'Failed to fetch market data' });
+    }
+  });
+
+  app.post('/api/trade/auto', async (req: any, res) => {
+    try {
+      if (!isDbConnected) return res.json({ success: false });
+      const { symbol, trend, entry, target, stopLoss, amount, setupData } = req.body;
+      const existing = await TradeSignal.findOne({ symbol, status: 'pending', trend });
+      if (!existing) {
+         await TradeSignal.create({
+             symbol,
+             trend,
+             entry,
+             target,
+             stopLoss,
+             amount: amount || 10,
+             setupData
+         });
+      }
+      res.json({ success: true });
+    } catch(err) {
+      res.status(500).json({ error: 'Failed' });
+    }
+  });
+
+  app.get('/api/trades', async (req: any, res) => {
+    try {
+      if (!isDbConnected) {
+         return res.json({ pending: [], closed: [] });
+      }
+      const pending = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
+      const closed = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
+      res.json({ pending, closed });
+    } catch(err) {
+      res.status(500).json({ error: 'Failed to fetch trades' });
     }
   });
 
@@ -735,9 +772,10 @@ async function startServer() {
                 if (outcome !== 'pending') {
                     signal.status = outcome;
                     signal.pnlPercent = pnl;
+                    signal.realizedPnl = (signal.amount || 10) * (pnl / 100);
                     signal.resolvedAt = new Date();
                     await signal.save();
-                    console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${pnl.toFixed(2)}%)`);
+                    console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${pnl.toFixed(2)}% | $${(signal.realizedPnl || 0).toFixed(2)})`);
                 }
              } catch(e) { }
          }

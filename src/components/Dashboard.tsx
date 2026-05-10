@@ -72,10 +72,8 @@ export function Dashboard() {
   const [tradeTP, setTradeTP] = useState('');
   const [tradeSL, setTradeSL] = useState('');
   const [placingTrade, setPlacingTrade] = useState(false);
-  const [openTrades, setOpenTrades] = useState<any[]>([
-    { id: '1', symbol: 'BTCUSDT', side: 'BUY', amount: '100', pnl: '+4.50' },
-    { id: '2', symbol: 'ETHUSDT', side: 'SELL', amount: '200', pnl: '-1.20' }
-  ]);
+  const [openTrades, setOpenTrades] = useState<any[]>([]);
+  const [closedTrades, setClosedTrades] = useState<any[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -427,6 +425,19 @@ export function Dashboard() {
       setAnalyses([newAnalysis, ...analyses]);
       setActiveAnalysis(newAnalysis);
       
+      // Hook auto trade 
+      if (algoResult?.trend && algoResult.trend !== 'neutral') {
+          axios.post('/api/trade/auto', {
+             symbol,
+             trend: algoResult.trend,
+             entry: algoResult.entry,
+             target: algoResult.target,
+             stopLoss: algoResult.stopLoss,
+             amount: 10,
+             setupData: algoResult
+          }).then(() => fetchTrades()).catch(()=>null);
+      }
+      
       // Auto-add a notification
       addNotification(`Engine processed ${symbol} - Trend: ${newAnalysis.trend}`);
     } catch (err: any) {
@@ -449,6 +460,22 @@ export function Dashboard() {
       console.error(err);
     }
   };
+
+  const fetchTrades = async () => {
+    try {
+      const res = await axios.get('/api/trades');
+      setOpenTrades(res.data.pending);
+      setClosedTrades(res.data.closed);
+    } catch(err) {
+      // Failed to load
+    }
+  };
+
+  useEffect(() => {
+    fetchTrades();
+    const intervalId = setInterval(fetchTrades, 15000); // every 15s
+    return () => clearInterval(intervalId);
+  }, []);
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
@@ -521,13 +548,7 @@ export function Dashboard() {
         stopLoss: tradeSL
       });
       alert(res.data.message);
-      setOpenTrades(prev => [{
-        id: Date.now().toString(),
-        symbol,
-        side: tradeSide,
-        amount: tradeAmount,
-        pnl: '+0.00'
-      }, ...prev]);
+      fetchTrades();
     } catch(err: any) {
       alert('Trade failed: ' + (err.response?.data?.error || err.message));
     }
@@ -939,29 +960,51 @@ plot(close)"
                          )}
                       </div>
                    ) : rightSidebarTab === 'trades' ? (
-                      <div className="flex flex-col gap-2">
-                         <div className="text-xs text-[#787b86] mb-1">Active Positions</div>
-                         {openTrades.length === 0 ? (
-                           <div className="text-sm text-[#787b86] italic text-center py-8">
-                              No open trades.
-                           </div>
-                         ) : (
-                           openTrades.map((trade) => (
-                              <div key={trade.id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
-                                 <div className="flex justify-between items-center w-full mb-2">
-                                    <span className="font-bold text-white text-sm"><span className={trade.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.side}</span> {trade.symbol}</span>
-                                    <span className={`text-sm font-bold ${trade.pnl.startsWith('+') ? 'text-[#089981]' : trade.pnl.startsWith('-') ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.pnl} USDT</span>
-                                 </div>
-                                 <div className="text-xs text-[#787b86] mb-3">Amount: {trade.amount} USDT</div>
-                                 {user?.role === 'admin' && (
-                                 <div className="flex gap-2">
-                                   <button onClick={() => alert('Take Profit Set!')} className="flex-1 bg-[#2a2e39] py-1 text-white text-[10px] rounded hover:bg-[#363a45] transition-colors">Set TP/SL</button>
-                                   <button onClick={() => setOpenTrades(prev => prev.filter(t => t.id !== trade.id))} className="flex-1 bg-[#2a2e39] py-1 text-white text-[10px] rounded hover:bg-[#363a45] transition-colors">Close</button>
-                                 </div>
-                                 )}
-                              </div>
-                           ))
-                         )}
+                      <div className="flex flex-col gap-4">
+                         <div>
+                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
+                           {openTrades.length === 0 ? (
+                             <div className="text-sm text-[#787b86] italic py-2">No pending trades.</div>
+                           ) : (
+                             <div className="flex flex-col gap-2">
+                               {openTrades.map((trade: any) => (
+                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className="text-xs text-[#787b86]">Pending...</span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>
+                                        <span className="text-xs text-[#089981]">Target: {trade.target}</span>
+                                     </div>
+                                     <div className="text-[10px] text-[#787b86]">Auto Amount: ${trade.amount}</div>
+                                  </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
+
+                         <div>
+                           <div className="text-xs text-[#787b86] font-bold mb-2 uppercase">Recent Outcomes</div>
+                           {closedTrades.length === 0 ? (
+                             <div className="text-sm text-[#787b86] italic py-2">No completed trades yet.</div>
+                           ) : (
+                             <div className="flex flex-col gap-2">
+                               {closedTrades.map((trade: any) => (
+                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full">
+                                        <span className="text-xs text-[#787b86]">Realized:</span>
+                                        <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
+                                     </div>
+                                  </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
                       </div>
                    ) : null}
                 </div>
@@ -1057,30 +1100,30 @@ plot(close)"
       </div>
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="sm:max-w-[700px] bg-[#1e222d] border-[#2a2e39] text-[#d1d4dc]">
-          <DialogHeader className="border-b border-[#2a2e39] pb-4 mb-4">
+        <DialogContent className="sm:max-w-[700px] w-[95vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#1e222d] border-[#2a2e39] text-[#d1d4dc] p-4 md:p-6">
+          <DialogHeader className="border-b border-[#2a2e39] pb-4 mb-2 md:mb-4 shrink-0">
             <DialogTitle className="text-white text-xl">Settings</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col md:flex-row gap-6 min-h-[400px]">
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 flex-1 overflow-hidden">
              {/* Settings Sidebar */}
-             <div className="w-full md:w-1/4 flex flex-col gap-2 border-b md:border-b-0 md:border-r border-[#2a2e39] pb-4 md:pb-0 pr-0 md:pr-4">
+             <div className="flex flex-row md:flex-col gap-2 border-b md:border-b-0 md:border-r border-[#2a2e39] pb-4 md:pb-0 pr-0 md:pr-4 shrink-0 overflow-x-auto md:overflow-x-visible w-full md:w-1/4 no-scrollbar">
                 <button 
                   onClick={() => setSettingsTab('profile')}
-                  className={`text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'profile' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
+                  className={`whitespace-nowrap text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'profile' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
                 >
                   My Profile & Wallet
                 </button>
                 <button 
                   onClick={() => setSettingsTab('admin')}
-                  className={`text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
+                  className={`whitespace-nowrap text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
                 >
                   Super Admin
                 </button>
              </div>
 
              {/* Settings Content */}
-             <div className="flex-1 overflow-y-auto">
+             <div className="flex-1 overflow-y-auto pr-2 pb-8">
                 {settingsTab === 'profile' ? (
                    <div className="space-y-6">
                       <div>
