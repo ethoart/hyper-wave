@@ -809,14 +809,6 @@ export function Dashboard() {
            
            <div className="flex flex-row md:flex-col items-center gap-1">
              <button onClick={() => setActiveTool('pen')} className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'pen' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><PenTool className="w-5 h-5" /></button>
-             {activeTool === 'pen' && (
-                <div className="flex flex-row md:flex-col gap-1.5 items-center p-1 bg-[#1e222d] border border-[#2a2e39] rounded">
-                  {['#2962ff', '#e2e8f0', '#f23645', '#089981', '#f59e0b'].map(c => (
-                    <button key={c} onClick={() => setDrawingColor(c)} style={{backgroundColor: c}} className={`w-3.5 h-3.5 rounded-full ${drawingColor === c ? 'ring-2 ring-white/50' : ''}`}/>
-                  ))}
-                  <button onClick={() => setClearDrawings(c => c + 1)} className="text-[10px] md:text-xs text-red-500 font-bold hover:bg-[#2a2e39] px-1 rounded ml-1 md:ml-0 md:mt-1">CLR</button>
-                </div>
-             )}
            </div>
 
            <button onClick={() => setActiveTool('trend')} title="Trend Line" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'trend' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><TrendingUp className="w-5 h-5" /></button>
@@ -824,6 +816,15 @@ export function Dashboard() {
            <button onClick={() => setActiveTool('parallel')} title="Parallel Channel" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'parallel' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Spline className="w-5 h-5" /></button>
            <button onClick={() => setActiveTool('rectangle')} title="Rectangle" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'rectangle' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Square className="w-5 h-5" /></button>
            <button onClick={() => setActiveTool('measure')} title="Measure & Percentage" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'measure' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Ruler className="w-5 h-5" /></button>
+           
+           {['pen', 'trend', 'fibonacci', 'parallel', 'rectangle', 'measure'].includes(activeTool) && (
+              <div className="flex flex-row md:flex-col gap-1.5 items-center p-1 bg-[#1e222d] border border-[#2a2e39] rounded mt-2">
+                {['#2962ff', '#e2e8f0', '#f23645', '#089981', '#f59e0b'].map(c => (
+                  <button key={c} onClick={() => setDrawingColor(c)} style={{backgroundColor: c}} className={`w-3.5 h-3.5 rounded-full ${drawingColor === c ? 'ring-2 ring-white/50' : ''}`}/>
+                ))}
+                <button onClick={() => setClearDrawings(c => c + 1)} className="text-[10px] md:text-xs text-red-500 font-bold hover:bg-[#2a2e39] px-1 rounded ml-1 md:ml-0 md:mt-1">CLR</button>
+              </div>
+           )}
            
            <Dialog>
              <DialogTrigger className="p-1.5 flex-shrink-0 md:p-2 ml-auto mt-0 md:ml-0 md:mt-auto md:mb-4 text-[#787b86] hover:text-[#d1d4dc]">

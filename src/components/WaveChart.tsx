@@ -31,6 +31,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   const userSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const auxiliarySeriesRef = useRef<ISeriesApi<"Line">[]>([]);
   const targetPriceLinesRef = useRef<any[]>([]);
+  const completedShapesRef = useRef<Array<{ series: any[], priceLines: any[] }>>([]);
 
   useEffect(() => {
     if (liveCandle && chartRef.current && candlestickSeriesRef.current) {
@@ -353,6 +354,18 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
            try { chartRef.current?.removeSeries(s); } catch (e) {}
        });
        auxiliarySeriesRef.current = [];
+       
+       completedShapesRef.current.forEach(shape => {
+           shape.series.forEach(s => {
+               try { chartRef.current?.removeSeries(s); } catch(e) {}
+           });
+           if (candlestickSeriesRef.current) {
+               shape.priceLines.forEach(line => {
+                   try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
+               });
+           }
+       });
+       completedShapesRef.current = [];
     }
   }, [clearDrawings]);
 
@@ -360,6 +373,33 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+         // Pop last shape
+         if (completedShapesRef.current.length > 0) {
+            const lastShape = completedShapesRef.current.pop();
+            if (lastShape) {
+                lastShape.series.forEach(s => {
+                    try { chart.removeSeries(s); } catch(err) {}
+                });
+                if (candlestickSeriesRef.current) {
+                    lastShape.priceLines.forEach(line => {
+                       try { candlestickSeriesRef.current?.removePriceLine(line); } catch(err) {}
+                    });
+                }
+            }
+         } else if (userDrawings.current.length > 0) {
+            // Alternatively pop from current drawing if in progress
+            userDrawings.current.pop();
+            if (userSeriesRef.current) {
+               userSeriesRef.current.setData(userDrawings.current as any);
+            }
+         }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
 
     // Apply cursor options
     chart.applyOptions({
@@ -409,16 +449,25 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
              let maxPoints = 2;
              if (activeTool === 'parallel') maxPoints = 3;
              if (userDrawings.current.length >= maxPoints) {
+                // Commit previous shape
+                completedShapesRef.current.push({
+                   series: [userSeriesRef.current, ...auxiliarySeriesRef.current].filter(Boolean) as any[],
+                   priceLines: [...targetPriceLinesRef.current]
+                });
+                
                 userDrawings.current = [];
-                userSeriesRef.current.setMarkers([]);
-                auxiliarySeriesRef.current.forEach(s => {
-                   try { chartRef.current?.removeSeries(s); } catch (e) {}
-                });
                 auxiliarySeriesRef.current = [];
-                targetPriceLinesRef.current.forEach(line => {
-                   try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
-                });
                 targetPriceLinesRef.current = [];
+                
+                // Create new series for next drawing
+                userSeriesRef.current = chart.addSeries(LineSeries, {
+                  color: drawingColor,
+                  lineWidth: 2,
+                  lineStyle: 0,
+                  crosshairMarkerVisible: true,
+                  lastValueVisible: false,
+                  priceLineVisible: false
+                });
              }
           }
           
@@ -448,12 +497,13 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
              const p2 = userDrawings.current[1];
              const diff = p2.value - p1.value;
              const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
-             levels.forEach(l => {
+             const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
+             levels.forEach((l, i) => {
                  const levelPrice = p1.value + diff * l;
                  if (candlestickSeriesRef.current) {
                      const pl = candlestickSeriesRef.current.createPriceLine({
                          price: levelPrice,
-                         color: drawingColor,
+                         color: colors[i] || drawingColor,
                          lineWidth: 1,
                          lineStyle: 2,
                          axisLabelVisible: true,
@@ -500,6 +550,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
       return () => {
         chart.unsubscribeClick(handleClick);
+        window.removeEventListener('keydown', handleKeyDown);
       };
     } else {
       // Re-enable scrolling using the mouse
