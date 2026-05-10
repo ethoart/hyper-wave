@@ -77,6 +77,7 @@ export function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [binanceBalance, setBinanceBalance] = useState<number | null>(null);
 
   // Mobile responsive state
   const [showRightSidebar, setShowRightSidebar] = useState(window.innerWidth >= 1024);
@@ -466,6 +467,7 @@ export function Dashboard() {
       const res = await axios.get('/api/trades');
       setOpenTrades(res.data.pending);
       setClosedTrades(res.data.closed);
+      if (res.data.balance !== undefined) setBinanceBalance(res.data.balance);
     } catch(err) {
       // Failed to load
     }
@@ -961,6 +963,12 @@ plot(close)"
                       </div>
                    ) : rightSidebarTab === 'trades' ? (
                       <div className="flex flex-col gap-4">
+                         {binanceBalance !== null && (
+                            <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center">
+                               <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Testnet</span>
+                               <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
+                            </div>
+                         )}
                          <div>
                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
                            {openTrades.length === 0 ? (
@@ -1100,30 +1108,30 @@ plot(close)"
       </div>
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="sm:max-w-[700px] w-[95vw] max-h-[90vh] overflow-hidden flex flex-col bg-[#1e222d] border-[#2a2e39] text-[#d1d4dc] p-4 md:p-6">
-          <DialogHeader className="border-b border-[#2a2e39] pb-4 mb-2 md:mb-4 shrink-0">
+        <DialogContent className="sm:max-w-[700px] w-[95vw] h-[90vh] md:h-auto md:max-h-[85vh] overflow-hidden flex flex-col bg-[#1e222d] border-[#2a2e39] text-[#d1d4dc] p-0 md:p-6 rounded-[8px]">
+          <DialogHeader className="border-b border-[#2a2e39] p-4 md:p-0 md:pb-4 shrink-0">
             <DialogTitle className="text-white text-xl">Settings</DialogTitle>
           </DialogHeader>
 
-          <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 flex-1 overflow-hidden">
+          <div className="flex flex-col md:flex-row gap-0 md:gap-6 min-h-0 flex-1 overflow-hidden">
              {/* Settings Sidebar */}
-             <div className="flex flex-row md:flex-col gap-2 border-b md:border-b-0 md:border-r border-[#2a2e39] pb-4 md:pb-0 pr-0 md:pr-4 shrink-0 overflow-x-auto md:overflow-x-visible w-full md:w-1/4 no-scrollbar">
+             <div className="flex flex-row md:flex-col gap-2 border-b md:border-b-0 md:border-r border-[#2a2e39] p-4 md:p-0 md:pr-4 shrink-0 overflow-x-auto md:overflow-x-visible w-full md:w-1/4 no-scrollbar">
                 <button 
                   onClick={() => setSettingsTab('profile')}
-                  className={`whitespace-nowrap text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'profile' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
+                  className={`whitespace-nowrap text-left px-4 py-2 md:p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'profile' ? 'bg-[#2962ff] text-white' : 'bg-[#131722] md:bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
                 >
                   My Profile & Wallet
                 </button>
                 <button 
                   onClick={() => setSettingsTab('admin')}
-                  className={`whitespace-nowrap text-left p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
+                  className={`whitespace-nowrap text-left px-4 py-2 md:p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'bg-[#131722] md:bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
                 >
                   Super Admin
                 </button>
              </div>
 
              {/* Settings Content */}
-             <div className="flex-1 overflow-y-auto pr-2 pb-8">
+             <div className="flex-1 overflow-y-auto p-4 md:p-0 md:pr-2 no-scrollbar">
                 {settingsTab === 'profile' ? (
                    <div className="space-y-6">
                       <div>
@@ -1137,6 +1145,27 @@ plot(close)"
                                <label className="block text-xs text-[#787b86] mb-1">Role</label>
                                <div className={`bg-[#131722] border border-[#2a2e39] p-2 text-sm rounded font-bold tracking-wide ${user?.role === 'admin' ? 'text-[#089981]' : user?.role === 'pro' ? 'text-[#2962ff]' : 'text-white'}`}>{user?.role?.toUpperCase() || 'USER'}</div>
                             </div>
+                         </div>
+                      </div>
+
+                      <div className="border-t border-[#2a2e39] pt-6">
+                         <h3 className="text-white font-bold mb-4">API Connections</h3>
+                         <div className="bg-[#131722] border border-[#2a2e39] p-4 rounded text-[#d1d4dc] text-sm">
+                           <div className="flex justify-between items-center mb-1">
+                              <span className="font-bold text-white">Binance Testnet</span>
+                              {binanceBalance !== null ? (
+                                <span className="text-[#089981] font-bold">Connected</span>
+                              ) : (
+                                <span className="text-[#787b86]">Not Configured</span>
+                              )}
+                           </div>
+                           <div className="text-[#787b86] text-xs mb-3">Uses Demo Account for auto execution</div>
+                           {binanceBalance !== null && (
+                              <div className="flex justify-between items-center bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
+                                 <span className="text-xs text-[#787b86]">Current Testnet Balance</span>
+                                 <span className="font-bold text-white text-lg">${binanceBalance.toFixed(2)} USDT</span>
+                              </div>
+                           )}
                          </div>
                       </div>
 

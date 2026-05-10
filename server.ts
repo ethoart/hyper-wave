@@ -10,6 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import crypto from 'crypto';
 import { analyzeElliottWaves } from './ewEngine.js';
+import { placeBinanceTrade, closeBinancePosition, getBinanceBalance } from './binanceService.js';
 
 dotenv.config();
 
@@ -66,7 +67,9 @@ const tradeSignalSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated'], default: 'pending' },
   pnlPercent: Number,
   realizedPnl: Number,
-  resolvedAt: Date
+  resolvedAt: Date,
+  binanceOrderId: String,
+  quantityExecuted: String,
 });
 const TradeSignal = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
 
@@ -304,18 +307,49 @@ async function startServer() {
       if (!isDbConnected) return res.json({ success: false });
       const { symbol, trend, entry, target, stopLoss, amount, setupData } = req.body;
       const existing = await TradeSignal.findOne({ symbol, status: 'pending', trend });
+      
+      const tradeAmountDollars = amount || 10;
+      const leverage = 10; // Use 10x leverage for calculations
+      const positionSizeUsdt = tradeAmountDollars * leverage;
+      
+      const entryPrice = parseFloat(entry);
+      const targetPrice = parseFloat(target);
+      
+      // Calculate projected profit based on position size
+      const priceDiff = Math.abs(targetPrice - entryPrice);
+      const projectedProfit = (positionSizeUsdt / entryPrice) * priceDiff;
+      
+      if (projectedProfit < 2) {
+         return res.json({ success: false, message: `Trade rejected: projected profit $${projectedProfit.toFixed(2)} is less than $2.00` });
+      }
+
       if (!existing) {
+         // Execute actual trade on Binance Demo Testnet API
+         let binanceTradeId = null;
+         try {
+             const quantity = (positionSizeUsdt / entryPrice).toFixed(3);
+             const side = trend === 'bullish' ? 'BUY' : 'SELL';
+             const apiRes = await placeBinanceTrade(symbol, side, parseFloat(quantity), 'MARKET');
+             binanceTradeId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+         } catch(e: any) {
+             console.error("Testnet Auto-Trade execution failed:", e.message);
+             // Skip inserting if we couldn't actually open the trade
+             return res.json({ success: false, message: "Execution failed: " + e.message });
+         }
+
          await TradeSignal.create({
              symbol,
              trend,
              entry,
              target,
              stopLoss,
-             amount: amount || 10,
-             setupData
+             amount: tradeAmountDollars,
+             setupData,
+             binanceOrderId: binanceTradeId,
+             quantityExecuted: (positionSizeUsdt / entryPrice).toFixed(3)
          });
       }
-      res.json({ success: true });
+      res.json({ success: true, message: "Trade executed." });
     } catch(err) {
       res.status(500).json({ error: 'Failed' });
     }
@@ -328,7 +362,13 @@ async function startServer() {
       }
       const pending = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
       const closed = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
-      res.json({ pending, closed });
+      
+      let balance = 0;
+      try {
+         balance = await getBinanceBalance() || 0;
+      } catch(e) { }
+
+      res.json({ pending, closed, balance });
     } catch(err) {
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
@@ -678,7 +718,15 @@ async function startServer() {
               const currentPrice = chartData[chartData.length - 1].close;
               // Check if it's decently actionable (entry within 2% of current price)
               const entryDiff = Math.abs(algoResult.entry - currentPrice) / currentPrice;
-              if (entryDiff < 0.02) {
+              
+              // Validate $2 projected profit rule based on $10 margin and 10x leverage
+              const tradeAmountDollars = 10;
+              const leverage = 10;
+              const positionSizeUsdt = tradeAmountDollars * leverage;
+              const priceDiff = Math.abs(algoResult.target - algoResult.entry);
+              const projectedProfit = (positionSizeUsdt / algoResult.entry) * priceDiff;
+
+              if (entryDiff < 0.02 && projectedProfit >= 2) {
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -688,9 +736,10 @@ async function startServer() {
                    target: algoResult.target,
                    stopLoss: algoResult.stopLoss,
                    reasoning: algoResult.reasoning,
-                   currentPrice: currentPrice
+                   currentPrice: currentPrice,
+                   projectedProfit
                  });
-                 console.log(`[Auto-Scan] Found actionable trade for ${pair.symbol}`);
+                 console.log(`[Auto-Scan] Found actionable trade for ${pair.symbol} (Proj. Pnl: $${projectedProfit.toFixed(2)})`);
               }
            }
            // Sleep to avoid ratelimits
@@ -713,13 +762,32 @@ async function startServer() {
                    // Check if we already logged this exact setup recently
                    const existing = await TradeSignal.findOne({ symbol: alert.symbol, status: 'pending', trend: alert.trend });
                    if (!existing) {
+                       const tradeAmountDollars = 10;
+                       const leverage = 10;
+                       const positionSizeUsdt = tradeAmountDollars * leverage;
+                       
+                       let binanceTradeId = null;
+                       try {
+                           const quantity = (positionSizeUsdt / alert.entry).toFixed(3);
+                           const side = alert.trend === 'bullish' ? 'BUY' : 'SELL';
+                           const apiRes = await placeBinanceTrade(alert.symbol, side, parseFloat(quantity), 'MARKET');
+                           binanceTradeId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+                           console.log(`[Binance] Executed ${side} ${quantity} ${alert.symbol}`);
+                       } catch(e: any) {
+                           console.error("[Binance Execution Error]:", e.message);
+                           continue; // skip DB insert if trade failed
+                       }
+
                        await TradeSignal.create({
                            symbol: alert.symbol,
                            trend: alert.trend,
                            entry: alert.entry,
                            target: alert.target,
                            stopLoss: alert.stopLoss,
-                           setupData: { reasoning: alert.reasoning, params: alert }
+                           amount: tradeAmountDollars,
+                           setupData: { reasoning: alert.reasoning, params: alert },
+                           binanceOrderId: binanceTradeId,
+                           quantityExecuted: (positionSizeUsdt / alert.entry).toFixed(3)
                        });
                    }
                } catch(e) { /* ignore */ }
@@ -770,6 +838,14 @@ async function startServer() {
                 }
                 
                 if (outcome !== 'pending') {
+                    if (signal.binanceOrderId) {
+                        try {
+                            const res = await closeBinancePosition(signal.symbol);
+                            console.log(`[Binance] Closed position for ${signal.symbol}:`, res.message);
+                        } catch(e: any) {
+                            console.error(`[Binance Close Error] ${signal.symbol}:`, e.message);
+                        }
+                    }
                     signal.status = outcome;
                     signal.pnlPercent = pnl;
                     signal.realizedPnl = (signal.amount || 10) * (pnl / 100);
