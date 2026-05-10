@@ -459,6 +459,16 @@ export function Dashboard() {
     }
   };
 
+  const handleRunOptimizer = async () => {
+    try {
+      addNotification("Starting background AI Optimizer using Gemini 3.1 Pro...");
+      const res = await axios.post('/api/ml/optimize');
+      addNotification(res.data.message || "Optimization complete.");
+    } catch (err: any) {
+      alert("Failed to run optimizer: " + (err.response?.data?.error || err.message));
+    }
+  };
+
   const handleScanBestPair = async () => {
     setScanning(true);
     try {
@@ -1161,7 +1171,21 @@ plot(close)"
                          </div>
                       </div>
 
-                      <div className="border-t border-[#2a2e39] pt-6">
+                      <div className="border-t border-[#2a2e39] pt-6 mt-6">
+                         <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-[#2962ff]" />
+                            AI Engine Optimizer
+                         </h3>
+                         <p className="text-xs text-[#787b86] mb-4">
+                           Forces the local ML evaluator to trigger the Gemini 3.1 Pro engine. It will analyze all recent win/loss mathematical predictions, recalibrate the wave structural parameters, and attempt to dynamically boost the system's win rate to 80%.
+                         </p>
+                         <button onClick={handleRunOptimizer} className="w-full bg-[#2962ff]/20 hover:bg-[#2962ff]/40 text-[#2962ff] border border-[#2962ff] text-sm font-bold py-2 rounded transition-colors flex items-center justify-center gap-2">
+                            <PlayCircle className="w-4 h-4" />
+                            Run Gemini Auto-Fix Optimizer
+                         </button>
+                      </div>
+
+                      <div className="border-t border-[#2a2e39] pt-6 mt-6">
                          <h3 className="text-white font-bold mb-4">DeFi Pool Multi-Trade API</h3>
                          <div className="space-y-3">
                            <div>
