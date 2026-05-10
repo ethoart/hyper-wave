@@ -45,6 +45,55 @@ export function computeSMA(data: any[], period: number = 20) {
   return sma;
 }
 
+export function computeEMA(data: any[], period: number = 20) {
+  if (!data || data.length < period) return [];
+  const ema = [];
+  const multiplier = 2 / (period + 1);
+  
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += data[i].close;
+  }
+  let prevEMA = sum / period;
+  ema.push({ time: Math.floor(new Date(data[period - 1].time).getTime() / 1000) as any, value: prevEMA });
+
+  for (let i = period; i < data.length; i++) {
+    const value = (data[i].close - prevEMA) * multiplier + prevEMA;
+    prevEMA = value;
+    ema.push({ time: Math.floor(new Date(data[i].time).getTime() / 1000) as any, value: value });
+  }
+  return ema;
+}
+
+export function computeMACD(data: any[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9) {
+  if (!data || data.length < slowPeriod) return [];
+  
+  const fastEMA = computeEMA(data, fastPeriod);
+  const slowEMA = computeEMA(data, slowPeriod);
+  
+  const macdLine = [];
+  for (let i = 0; i < slowEMA.length; i++) {
+    const time = slowEMA[i].time;
+    const fastValue = fastEMA.find(e => e.time === time)?.value || 0;
+    macdLine.push({ time, value: fastValue - slowEMA[i].value, close: fastValue - slowEMA[i].value }); // Include close for passing to EMA
+  }
+  
+  const signalLine = computeEMA(macdLine, signalPeriod);
+  const macd = [];
+  
+  for (let i = 0; i < signalLine.length; i++) {
+    const time = signalLine[i].time;
+    const macdValue = macdLine.find(m => m.time === time)?.value || 0;
+    macd.push({
+      time,
+      macd: macdValue,
+      signal: signalLine[i].value,
+      histogram: macdValue - signalLine[i].value
+    });
+  }
+  return macd;
+}
+
 export function computeBB(data: any[], period: number = 20, multiplier: number = 2) {
   if (!data || data.length < period) return [];
   const sma = computeSMA(data, period);

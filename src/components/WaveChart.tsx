@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries, LineSeries, CrosshairMode } from 'lightweight-charts';
-import { computeRSI, computeSMA, computeBB } from '../lib/indicators';
+import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries, LineSeries, HistogramSeries, CrosshairMode } from 'lightweight-charts';
+import { computeRSI, computeSMA, computeBB, computeEMA, computeMACD } from '../lib/indicators';
 
 interface ChartProps {
   data: any[];
@@ -17,13 +17,40 @@ interface ChartProps {
   flagPoints?: { time: number; price: number }[][];
 }
 
+const AVAILABLE_INDICATORS = [
+  { id: 'sma', name: 'SMA', defaultOptions: { period: 20 }, description: 'Simple Moving Average' },
+  { id: 'ema', name: 'EMA', defaultOptions: { period: 20 }, description: 'Exponential Moving Average' },
+  { id: 'bb', name: 'Bollinger Bands', defaultOptions: { period: 20, multiplier: 2 }, description: 'Bollinger Bands' },
+  { id: 'rsi', name: 'RSI', defaultOptions: { period: 14 }, description: 'Relative Strength Index' },
+  { id: 'macd', name: 'MACD', defaultOptions: { fast: 12, slow: 26, signal: 9 }, description: 'Moving Avg Convergence Divergence' },
+];
+
 export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0, channelPoints, flagPoints }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
-  const [showRSI, setShowRSI] = useState(true);
-  const [showSMA, setShowSMA] = useState(false);
-  const [showBB, setShowBB] = useState(false);
+  const macdContainerRef = useRef<HTMLDivElement>(null);
   
+  const [activeIndicators, setActiveIndicators] = useState<Record<string, boolean>>({
+    rsi: true,
+  });
+  const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowIndicatorMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleIndicator = (id: string) => {
+    setActiveIndicators(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   // Ref to hold user drawn lines
   const userDrawings = useRef<Array<{time: number, value: number}>>([]);
   const chartRef = useRef<IChartApi | null>(null);
@@ -122,7 +149,7 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     candlestickSeriesRef.current = candlestickSeries;
 
     // Indicators: SMA
-    if (showSMA) {
+    if (activeIndicators.sma) {
       const smaData = computeSMA(data, 20);
       const smaSeries = chart.addSeries(LineSeries, {
         color: '#f59e0b',
@@ -132,8 +159,21 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       smaSeries.setData(smaData);
     }
     
+    // Indicators: EMA
+    if (activeIndicators.ema) {
+      const emaData = computeEMA(data, 20);
+      if (emaData.length > 0) {
+        const emaSeries = chart.addSeries(LineSeries, {
+          color: '#10b981',
+          lineWidth: 1,
+          title: 'EMA 20',
+        });
+        emaSeries.setData(emaData);
+      }
+    }
+    
     // Indicators: BB
-    if (showBB) {
+    if (activeIndicators.bb) {
       const bbData = computeBB(data, 20, 2);
       if (bbData.length > 0) {
         const upperSeries = chart.addSeries(LineSeries, { color: '#2962ff', lineWidth: 1, title: 'BB Upper' });
@@ -282,49 +322,70 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
 
     chart.timeScale().fitContent();
 
-    // RSI Chart (Secondary Pane)
+    // Oscillators
     let rsiChart: IChartApi | null = null;
-    let rsiSeries: ISeriesApi<"Line"> | any = null;
-
+    let macdChart: IChartApi | null = null;
     let syncTimeout: any;
-    if (showRSI && rsiContainerRef.current) {
+
+    if (activeIndicators.rsi && rsiContainerRef.current) {
       rsiChart = createChart(rsiContainerRef.current, {
         autoSize: true,
         layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#787b86', attributionLogo: false },
         grid: { vertLines: { color: '#2a2e39' }, horzLines: { color: '#2a2e39' } },
-        timeScale: { visible: false }, // Sync with main chart, hide axis
+        timeScale: { visible: false },
         rightPriceScale: { borderColor: '#2a2e39' }
       });
       
-      rsiSeries = rsiChart.addSeries(LineSeries, {
-        color: '#8b5cf6',
-        lineWidth: 1,
-        title: 'RSI 14',
-      });
+      const rsiSeries = rsiChart.addSeries(LineSeries, { color: '#8b5cf6', lineWidth: 1, title: 'RSI 14' });
       const rsiData = computeRSI(data, 14);
       rsiSeries.setData(rsiData);
-
-      // Add overbought/oversold lines
       rsiSeries.createPriceLine({ price: 70, color: '#2a2e39', lineWidth: 1, lineStyle: 2 });
       rsiSeries.createPriceLine({ price: 30, color: '#2a2e39', lineWidth: 1, lineStyle: 2 });
+    }
 
-      // Sync Logical Range
-      chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
-        if (!chartRef.current) return; // Prevent updating if unmounted/disposed
-        if (range && rsiChart) {
-          try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
-        }
+    if (activeIndicators.macd && macdContainerRef.current) {
+      macdChart = createChart(macdContainerRef.current, {
+        autoSize: true,
+        layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#787b86', attributionLogo: false },
+        grid: { vertLines: { color: '#2a2e39' }, horzLines: { color: '#2a2e39' } },
+        timeScale: { visible: false },
+        rightPriceScale: { borderColor: '#2a2e39' }
       });
       
-      // Initial sync
-      syncTimeout = setTimeout(() => {
-          if (!chartRef.current) return; // Disposed
-          try {
-            const mainRange = chart.timeScale().getVisibleLogicalRange();
-            if (mainRange && rsiChart) rsiChart.timeScale().setVisibleLogicalRange(mainRange);
-          } catch(e) {}
-      }, 50);
+      const macdSeries = macdChart.addSeries(LineSeries, { color: '#2962ff', lineWidth: 1, title: 'MACD' });
+      const signalSeries = macdChart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, title: 'Signal' });
+      const histogramSeries = macdChart.addSeries(HistogramSeries, { color: '#26a69a' });
+      
+      const macdData = computeMACD(data, 12, 26, 9);
+      macdSeries.setData(macdData.map((d: any) => ({ time: d.time, value: d.macd })));
+      signalSeries.setData(macdData.map((d: any) => ({ time: d.time, value: d.signal })));
+      histogramSeries.setData(macdData.map((d: any) => ({ 
+        time: d.time, 
+        value: d.histogram, 
+        color: d.histogram >= 0 ? '#26a69a' : '#ef5350' 
+      })));
     }
+
+    // Sync Logical Range
+    chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (!chartRef.current) return;
+      if (range) {
+        if (rsiChart) { try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e) {} }
+        if (macdChart) { try { macdChart.timeScale().setVisibleLogicalRange(range); } catch(e) {} }
+      }
+    });
+    
+    // Initial sync
+    syncTimeout = setTimeout(() => {
+        if (!chartRef.current) return;
+        try {
+          const mainRange = chart.timeScale().getVisibleLogicalRange();
+          if (mainRange) {
+            if (rsiChart) rsiChart.timeScale().setVisibleLogicalRange(mainRange);
+            if (macdChart) macdChart.timeScale().setVisibleLogicalRange(mainRange);
+          }
+        } catch(e) {}
+    }, 50);
 
     return () => {
       clearTimeout(syncTimeout);
@@ -333,8 +394,9 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       candlestickSeriesRef.current = null;
       userSeriesRef.current = null;
       try { if (rsiChart) rsiChart.remove(); } catch(e) {}
+      try { if (macdChart) macdChart.remove(); } catch(e) {}
     };
-  }, [data, entryPoint, exitPoint, stopLoss, wavePoints, trend, showRSI, showSMA, showBB]);
+  }, [data, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeIndicators]);
 
   useEffect(() => {
     if (clearDrawings > 0) {
@@ -571,17 +633,54 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   }, [activeTool]);
 
   if (!data || data.length === 0) return <div>No data available</div>;
-
+  
   return (
     <div className="w-full h-full flex flex-col relative">
-      <div className="absolute top-12 left-2 z-[9] flex gap-2 pointer-events-none">
-        <button onClick={() => setShowSMA(!showSMA)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showSMA ? 'border-[#f59e0b] text-[#f59e0b]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>SMA 20</button>
-        <button onClick={() => setShowRSI(!showRSI)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showRSI ? 'border-[#8b5cf6] text-[#8b5cf6]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>RSI 14</button>
-        <button onClick={() => setShowBB(!showBB)} className={`pointer-events-auto text-[10px] px-2 py-1 rounded bg-[#131722]/80 backdrop-blur border ${showBB ? 'border-[#2962ff] text-[#2962ff]' : 'border-[#2a2e39] text-[#787b86]'} cursor-pointer transition-colors shadow-sm`}>BB</button>
+      <div className="absolute top-12 left-2 z-[9] flex gap-2" ref={menuRef}>
+        <button 
+          onClick={() => setShowIndicatorMenu(!showIndicatorMenu)} 
+          className="pointer-events-auto text-xs px-3 py-1.5 rounded bg-[#131722]/90 backdrop-blur border border-[#2a2e39] text-[#d1d4dc] hover:text-white hover:bg-[#2a2e39] cursor-pointer transition-colors shadow-sm font-medium flex items-center gap-1.5"
+        >
+          <span className="font-serif italic text-blue-400 font-bold">fx</span>
+          Indicators
+        </button>
+        
+        {showIndicatorMenu && (
+          <div className="absolute top-10 left-0 w-64 bg-[#1e222d] border border-[#2a2e39] rounded shadow-xl overflow-hidden pointer-events-auto flex flex-col">
+            <div className="px-3 py-2 border-b border-[#2a2e39] font-medium text-xs text-[#787b86] uppercase tracking-wider">
+              Indicator Library
+            </div>
+            <div className="max-h-[300px] overflow-y-auto">
+              {AVAILABLE_INDICATORS.map(ind => (
+                <div 
+                  key={ind.id} 
+                  onClick={() => toggleIndicator(ind.id)}
+                  className="px-3 py-2.5 flex items-center justify-between hover:bg-[#2a2e39] cursor-pointer transition-colors border-b border-[#2a2e39]/50 last:border-0"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm text-[#d1d4dc] font-medium">{ind.name}</span>
+                    <span className="text-[10px] text-[#787b86] mt-0.5">{ind.description}</span>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border ${activeIndicators[ind.id] ? 'bg-blue-500 border-blue-500' : 'border-[#787b86]'} flex items-center justify-center transition-colors`}>
+                    {activeIndicators[ind.id] && (
+                      <svg viewBox="0 0 14 14" className="w-2.5 h-2.5 text-white stroke-current fill-none stroke-2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 7.5 6 10.5 11 4" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
       <div className="w-full flex-1 relative min-h-0" ref={chartContainerRef} />
-      {showRSI && (
-        <div className="w-full h-[100px] mt-2 relative border-t border-[#2a2e39]" ref={rsiContainerRef} />
+      {activeIndicators.rsi && (
+        <div className="w-full h-[150px] md:h-[100px] mt-2 relative border-t border-[#2a2e39]" ref={rsiContainerRef} />
+      )}
+      {activeIndicators.macd && (
+        <div className="w-full h-[150px] md:h-[100px] mt-2 relative border-t border-[#2a2e39]" ref={macdContainerRef} />
       )}
     </div>
   );
