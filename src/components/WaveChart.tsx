@@ -259,20 +259,22 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     if (flagPoints) drawExtraLines(flagPoints, '#f59e0b', 0); // solid for flag
 
     // Reference lines
-    if (entryPoint) {
-      candlestickSeries.createPriceLine({
-        price: entryPoint, color: '#3b82f6', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Entry',
-      });
-    }
-    if (exitPoint) {
-      candlestickSeries.createPriceLine({
-        price: exitPoint, color: '#089981', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Target',
-      });
-    }
-    if (stopLoss) {
-      candlestickSeries.createPriceLine({
-        price: stopLoss, color: '#f23645', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Stop',
-      });
+    if (trend !== 'neutral') {
+      if (entryPoint) {
+        candlestickSeries.createPriceLine({
+          price: entryPoint, color: '#3b82f6', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Entry',
+        });
+      }
+      if (exitPoint) {
+        candlestickSeries.createPriceLine({
+          price: exitPoint, color: '#089981', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Target',
+        });
+      }
+      if (stopLoss) {
+        candlestickSeries.createPriceLine({
+          price: stopLoss, color: '#f23645', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'Stop',
+        });
+      }
     }
 
     chart.timeScale().fitContent();

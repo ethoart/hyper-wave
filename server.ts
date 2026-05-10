@@ -399,7 +399,7 @@ async function startServer() {
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
         const prompt = `
-          You are a highly skilled professional crypto trader and quantitative analyst specializing in Elliott Wave Theory.
+          You are a highly skilled professional crypto trader and quantitative analyst specializing in Technical Analysis, Chart Patterns, and Elliott Wave Theory.
           
           We have an algorithmic pure-math engine that scans for pivot points and evaluates strict Elliott Wave mathematical constraints & Fibonacci relationships.
           Math Engine Output for Context: ${mathOutputText}
@@ -409,29 +409,30 @@ async function startServer() {
           
           Your task is to synthesize the math engine's output with your AI capability.
           Look at the LAST FEW CANDLES in the provided data. This is the current active price.
-          CRITICAL: If the algorithmic engine explicitly states it "did not find a strict 100% textbook 5-wave structure", you MUST set the "trend" to "neutral" and explain that no mathematically valid trade exists.
-          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it and already hit target), you MUST also set the "trend" to "neutral" and state the trade is invalidated.
-          However, if a valid setup exists and the entry is still actionable (or you can calculate a NEW actionable pullback entry), confirm or adjust the Entry, Target, and Stop Loss points based on local support/resistance.
-          Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%"). If neutral, put "N/A".
+          CRITICAL: If the algorithmic engine explicitly states it "did not find a strict 100% textbook 5-wave structure", you MUST search the recent price action for other valid classic charting patterns such as Cup and Handle, Falling Wedges, Bull Flags, Triangles, or Double Bottoms/Tops.
+          CRITICAL: If the math engine's suggested entry point has already been missed (the price has moved significantly away from it and already hit target), you MUST ignore it and formulate a NEW actionable trade based on a current pattern (like a wedge breakout or cup and handle). If there is NO pattern to trade, set the "trend" to "neutral" and explain why.
+          Confirm or adjust the Entry, Target, and Stop Loss points based on local support/resistance.
+          Provide a theoretical winning probability percentage based on the strength of the setup (e.g. "85%"). If neutral, put "-".
           
           You must return the result as a valid JSON object matching this schema exactly, just raw JSON:
           {
-            "analysisText": "Your expert synthesis: How does the raw data support the engine's finding? What's the final trade rationale? EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
+            "analysisText": "Your expert synthesis: State the main pattern driving this trade (e.g., 'Cup and Handle breakout', 'Rising Wedge setup', 'Elliott Wave 4 pullback'). Include the final trade rationale. EXPLAIN the reasoning for the exit point, entry point, and stop-loss targets.",
             "winRate": "<percentage>%",
             "entryPoint": <number>,
             "exitPoint": <number>,
             "stopLoss": <number>,
             "trend": "bullish" | "bearish" | "neutral",
-            "wavePoints": [ {"time": <unix epoch ms>, "price": <number>}, ...up to 6 points representing the analyzed wave structure. IMPORTANT: The "time" value MUST exactly match one of the "time" values from the provided recent price data array, otherwise the chart will crash! ]
+            "wavePoints": [ {"time": <unix epoch ms>, "price": <number>}, ...up to 6 points representing the analyzed wave structure. IMPORTANT: The "time" value MUST exactly match one of the "time" values from the provided recent price data array, otherwise the chart will crash! Keep empty if not an Elliott Wave trade. ]
           }
           CRITICAL CONSTRAINT: 
           If trend is "bullish", you MUST ensure exitPoint > entryPoint > stopLoss. 
           If trend is "bearish", you MUST ensure exitPoint < entryPoint < stopLoss.
+          If trend is "neutral", ensure entryPoint, exitPoint, and stopLoss are all equal to the current price.
           Any violation of this mathematical constraint will result in a fatal invalidation of the trade logic.
         `;
 
         const aiResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-1.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -497,8 +498,8 @@ async function startServer() {
         }
         
         result = {
-          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No mathematical logic computed.'}`,
-          winRate: algoResult ? "70%" : "N/A",
+          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No actionable trade could be computed at this time. Market structure is unclear.'}`,
+          winRate: algoResult ? "70%" : "-",
           entryPoint: algoResult?.entry || data[data.length - 1].close,
           exitPoint: algoResult?.target || data[data.length - 1].close,
           stopLoss: algoResult?.stopLoss || data[data.length - 1].close,
