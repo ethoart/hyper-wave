@@ -31,7 +31,7 @@ export function Dashboard() {
     localStorage.setItem('hyperwave_interval', interval);
   }, [interval]);
   
-  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchlist, setWatchlist] = useState<Array<{symbol: string, pinned: boolean, timestamp: number}>>([]);
   const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades'>('watchlist');
   const [additionalCharts, setAdditionalCharts] = useState<Array<{symbol: string, interval: string}>>([]);
   
@@ -41,14 +41,39 @@ export function Dashboard() {
   useEffect(() => {
     const savedWatchlist = localStorage.getItem('hyperwave_watchlist');
     if (savedWatchlist) {
-      setWatchlist(JSON.parse(savedWatchlist));
+      try {
+        const parsed = JSON.parse(savedWatchlist);
+        if (parsed.length > 0 && typeof parsed[0] === 'string') {
+          // migrate
+          const migrated = parsed.map((s: string) => ({ symbol: s, pinned: true, timestamp: Date.now() }));
+          setWatchlist(migrated);
+          localStorage.setItem('hyperwave_watchlist', JSON.stringify(migrated));
+        } else {
+          setWatchlist(parsed);
+        }
+      } catch(e) {}
     }
   }, []);
 
   const toggleWatchlist = (sym: string) => {
-    const updated = watchlist.includes(sym) ? watchlist.filter(s => s !== sym) : [...watchlist, sym];
+    const existing = watchlist.find(w => w.symbol === sym);
+    let updated;
+    if (existing) {
+       // if it exists, remove it if it was manually toggled (meaning we unpin/remove)
+       updated = watchlist.filter(w => w.symbol !== sym);
+    } else {
+       // manually added to watchlist so pinned is true
+       updated = [...watchlist, { symbol: sym, pinned: true, timestamp: Date.now() }];
+    }
     setWatchlist(updated);
     localStorage.setItem('hyperwave_watchlist', JSON.stringify(updated));
+  };
+  
+  const pinUnpinPair = (sym: string, e: any) => {
+      e.stopPropagation();
+      const updated = watchlist.map(w => w.symbol === sym ? { ...w, pinned: !w.pinned } : w);
+      setWatchlist(updated);
+      localStorage.setItem('hyperwave_watchlist', JSON.stringify(updated));
   };
   
   const [chartData, setChartData] = useState<any[]>([]);
@@ -507,10 +532,20 @@ export function Dashboard() {
         const best = topPairs[0];
         const newSymbols = topPairs.map((p: any) => p.symbol);
         
-        setWatchlist((prev: string[]) => {
-          const updated = Array.from(new Set([...prev, ...newSymbols]));
-          localStorage.setItem('hyperwave_watchlist', JSON.stringify(updated));
-          return updated;
+        setWatchlist((prev) => {
+          const pinned = prev.filter(p => p.pinned);
+          const autoList = newSymbols.map((sym: string) => ({ symbol: sym, pinned: false, timestamp: Date.now() }));
+          
+          // As requested: auto remove old unpinned pairs, only keep manually pinned AND the newly scanned ones
+          const finalUpdated = [...pinned];
+          for (const a of autoList) {
+             if (!finalUpdated.find(u => u.symbol === a.symbol)) {
+                 finalUpdated.push(a);
+             }
+          }
+          
+          localStorage.setItem('hyperwave_watchlist', JSON.stringify(finalUpdated));
+          return finalUpdated;
         });
         
         addNotification(`Engine found best pairs: ${newSymbols.join(', ')}`);
@@ -937,7 +972,7 @@ plot(close)"
                                onClick={() => toggleWatchlist(symbol)}
                                className="text-xs bg-[#1e222d] border border-[#2a2e39] px-2 py-1 rounded text-[#2962ff] font-medium hover:bg-[#2a2e39] transition-colors"
                             >
-                               {watchlist.includes(symbol) ? '- Remove Current' : '+ Add Current'}
+                               {watchlist.some(w => w.symbol === symbol) ? '- Remove Current' : '+ Add Current'}
                             </button>
                          </div>
                          {watchlist.length === 0 ? (
@@ -945,18 +980,25 @@ plot(close)"
                                Watchlist is empty.
                             </div>
                          ) : (
-                            watchlist.map((sym, idx) => (
+                            watchlist.map((item, idx) => (
                                <button 
-                                 key={`${sym}-${idx}`}
+                                 key={`${item.symbol}-${idx}`}
                                  onClick={() => {
-                                    setSymbol(sym);
-                                    setSymbolInput(sym);
+                                    setSymbol(item.symbol);
+                                    setSymbolInput(item.symbol);
                                     if(window.innerWidth < 768) setShowRightSidebar(false);
                                  }}
-                                 className="flex justify-between items-center p-3 rounded border border-[#2a2e39] bg-[#1e222d] hover:bg-[#2a2e39] text-left transition-colors"
+                                 className="flex justify-between items-center p-3 rounded border border-[#2a2e39] bg-[#1e222d] hover:bg-[#2a2e39] text-left transition-colors group"
                                >
-                                  <span className="font-bold text-white text-sm">{sym}</span>
-                                  <button onClick={(e) => { e.stopPropagation(); toggleWatchlist(sym); }} className="text-[#787b86] hover:text-[#f23645]"><X className="w-3.5 h-3.5"/></button>
+                                  <span className="font-bold text-white text-sm">{item.symbol}</span>
+                                  <div className="flex gap-2 items-center">
+                                     <button onClick={(e) => pinUnpinPair(item.symbol, e)} className={`${item.pinned ? 'text-[#2962ff]' : 'text-[#787b86] opacity-0 group-hover:opacity-100'} hover:text-[#2962ff] transition-all`}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>
+                                     </button>
+                                     <button onClick={(e) => { e.stopPropagation(); toggleWatchlist(item.symbol); }} className="text-[#787b86] hover:text-[#f23645]">
+                                        <X className="w-3.5 h-3.5"/>
+                                     </button>
+                                  </div>
                                </button>
                             ))
                          )}
@@ -979,7 +1021,9 @@ plot(close)"
                                   <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
-                                        <span className="text-xs text-[#787b86]">Pending...</span>
+                                        <span className="text-xs text-[#787b86]">
+                                          {trade.binanceOrderId ? <span className="text-[#2962ff] font-bold">LIVE</span> : 'Waiting Entry'}
+                                        </span>
                                      </div>
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>

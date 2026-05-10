@@ -5,28 +5,92 @@ import { Loader2, X } from 'lucide-react';
 
 export function MiniChart({ symbol, interval, activeTool, onClose }: { symbol: string, interval: string, activeTool: string, onClose: () => void }) {
   const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [liveCandle, setLiveCandle] = useState<any>(null);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
       try {
         const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
-        const res = await axios.get(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${safeInterval}&limit=200`);
-        const formatted = res.data.map((d: any) => ({
-          time: d[0],
-          open: parseFloat(d[1]),
-          high: parseFloat(d[2]),
-          low: parseFloat(d[3]),
-          close: parseFloat(d[4])
-        }));
-        setData(formatted);
+        const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=200`);
+        if (isMounted) setData(res.data);
       } catch (err) {
-        console.error(err);
+        console.error("MiniChart fetch error:", err);
       }
-      setLoading(false);
+      if (isMounted) setLoading(false);
     };
     fetchData();
+    return () => { isMounted = false; };
+  }, [symbol, interval]);
+
+  // WebSocket for Live Data
+  useEffect(() => {
+    if (!symbol) return;
+    const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
+    
+    let wsFutures: WebSocket | null = null;
+    let wsSpot: WebSocket | null = null;
+    let reconnectAttempts = 0;
+    
+    const connectWs = () => {
+       const futuresWsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+       const spotWsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
+       
+       wsFutures = new WebSocket(futuresWsUrl);
+       wsSpot = new WebSocket(spotWsUrl);
+
+       const handleMessage = (event: MessageEvent) => {
+         const message = JSON.parse(event.data);
+         if (message.e === 'kline') {
+           const kline = message.k;
+           const liveCdl = {
+             time: Math.floor(kline.t / 1000),
+             open: parseFloat(kline.o),
+             high: parseFloat(kline.h),
+             low: parseFloat(kline.l),
+             close: parseFloat(kline.c),
+             volume: parseFloat(kline.v),
+           };
+           setLiveCandle(liveCdl);
+           
+           if (kline.x) {
+              setData(prev => {
+                 const newData = [...prev];
+                 const lastIdx = newData.length - 1;
+                 if (lastIdx >= 0) {
+                    if (newData[lastIdx].time === kline.t) {
+                       newData[lastIdx] = { ...liveCdl, time: kline.t };
+                    } else {
+                       newData.push({ ...liveCdl, time: kline.t });
+                    }
+                 }
+                 return newData;
+              });
+           }
+         }
+       };
+
+       wsFutures.onmessage = handleMessage;
+       wsSpot.onmessage = handleMessage;
+
+       const handleClose = () => {
+          if (reconnectAttempts < 5) {
+             reconnectAttempts++;
+             setTimeout(connectWs, 2000 * reconnectAttempts);
+          }
+       };
+       wsFutures.onclose = handleClose;
+       wsSpot.onclose = handleClose;
+    };
+
+    connectWs();
+
+    return () => {
+       if (wsFutures) wsFutures.close();
+       if (wsSpot) wsSpot.close();
+    };
   }, [symbol, interval]);
 
   return (
@@ -34,6 +98,7 @@ export function MiniChart({ symbol, interval, activeTool, onClose }: { symbol: s
       <div className="absolute top-2 left-2 z-10 flex gap-2">
         <div className="bg-[#1e222d]/80 backdrop-blur px-2 py-1 rounded text-xs font-bold text-white border border-[#2a2e39]">
           {symbol} {interval}
+          {liveCandle && <span className="ml-2 text-[#2962ff]">{liveCandle.close}</span>}
         </div>
       </div>
       <button 
@@ -47,8 +112,13 @@ export function MiniChart({ symbol, interval, activeTool, onClose }: { symbol: s
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-[#787b86]" />
         </div>
+      ) : (!data || data.length === 0) ? (
+        <div className="flex-1 flex items-center justify-center text-[#787b86] text-sm flex-col">
+          <span>No data available for {symbol}</span>
+          <span className="text-xs mt-2 opacity-50">Checking valid interval or rate limits</span>
+        </div>
       ) : (
-        <WaveChart data={data} activeTool={activeTool} />
+        <WaveChart data={data} liveCandle={liveCandle} activeTool={activeTool} />
       )}
     </div>
   );

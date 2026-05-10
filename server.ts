@@ -58,13 +58,14 @@ const Analysis = mongoose.models.Analysis || mongoose.model('Analysis', analysis
 const tradeSignalSchema = new mongoose.Schema({
   symbol: String,
   timestamp: { type: Date, default: Date.now },
+  expiresAt: Date,
   trend: String,
   entry: Number,
   target: Number,
   stopLoss: Number,
   amount: { type: Number, default: 10 }, // Auto Paper Trade size: $10
   setupData: mongoose.Schema.Types.Mixed, // algorithmic context
-  status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated', 'expired'], default: 'pending' },
   pnlPercent: Number,
   realizedPnl: Number,
   resolvedAt: Date,
@@ -324,17 +325,13 @@ async function startServer() {
       }
 
       if (!existing) {
-         // Execute actual trade on Binance Demo Testnet API
-         let binanceTradeId = null;
-         try {
-             const quantity = (positionSizeUsdt / entryPrice).toFixed(3);
-             const side = trend === 'bullish' ? 'BUY' : 'SELL';
-             const apiRes = await placeBinanceTrade(symbol, side, parseFloat(quantity), 'MARKET');
-             binanceTradeId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
-         } catch(e: any) {
-             console.error("Testnet Auto-Trade execution failed:", e.message);
-             // Skip inserting if we couldn't actually open the trade
-             return res.json({ success: false, message: "Execution failed: " + e.message });
+         // Create the pending trade signal. The Outcome Evaluator will trigger it when entry price is hit.
+         let expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000); // default 5 hours
+         if (setupData && setupData.timeframe) {
+            // Very roughly map timeframe to ms for 5 candles
+            const tfMap: any = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1d': 86400000 };
+            const ms = tfMap[setupData.timeframe];
+            if (ms) expiresAt = new Date(Date.now() + ms * 5); // valid for 5 candles
          }
 
          await TradeSignal.create({
@@ -345,11 +342,10 @@ async function startServer() {
              stopLoss,
              amount: tradeAmountDollars,
              setupData,
-             binanceOrderId: binanceTradeId,
-             quantityExecuted: (positionSizeUsdt / entryPrice).toFixed(3)
+             expiresAt
          });
       }
-      res.json({ success: true, message: "Trade executed." });
+      res.json({ success: true, message: "Trade signal queued. Waiting for entry." });
     } catch(err) {
       res.status(500).json({ error: 'Failed' });
     }
@@ -766,18 +762,10 @@ async function startServer() {
                        const leverage = 10;
                        const positionSizeUsdt = tradeAmountDollars * leverage;
                        
-                       let binanceTradeId = null;
-                       try {
-                           const quantity = (positionSizeUsdt / alert.entry).toFixed(3);
-                           const side = alert.trend === 'bullish' ? 'BUY' : 'SELL';
-                           const apiRes = await placeBinanceTrade(alert.symbol, side, parseFloat(quantity), 'MARKET');
-                           binanceTradeId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
-                           console.log(`[Binance] Executed ${side} ${quantity} ${alert.symbol}`);
-                       } catch(e: any) {
-                           console.error("[Binance Execution Error]:", e.message);
-                           continue; // skip DB insert if trade failed
-                       }
-
+                       // Calculate expiration based on 5 periods of 15m (just a default since scan uses 15m or 1h)
+                       // If we don't have the explicit interval from alert, assume 1h.
+                       const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000); // default 5 hours
+                       
                        await TradeSignal.create({
                            symbol: alert.symbol,
                            trend: alert.trend,
@@ -785,9 +773,8 @@ async function startServer() {
                            target: alert.target,
                            stopLoss: alert.stopLoss,
                            amount: tradeAmountDollars,
-                           setupData: { reasoning: alert.reasoning, params: alert },
-                           binanceOrderId: binanceTradeId,
-                           quantityExecuted: (positionSizeUsdt / alert.entry).toFixed(3)
+                           expiresAt,
+                           setupData: { reasoning: alert.reasoning, params: alert }
                        });
                    }
                } catch(e) { /* ignore */ }
@@ -819,21 +806,54 @@ async function startServer() {
                 let outcome = 'pending';
                 let pnl = 0;
                 
-                if (signal.trend === 'bullish') {
-                    if (price >= signal.target) {
-                        outcome = 'win';
-                        pnl = (signal.target - signal.entry) / signal.entry * 100;
-                    } else if (price <= signal.stopLoss) {
-                        outcome = 'loss';
-                        pnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
-                    }
-                } else if (signal.trend === 'bearish') {
-                    if (price <= signal.target) {
-                        outcome = 'win';
-                        pnl = (signal.entry - signal.target) / signal.entry * 100;
-                    } else if (price >= signal.stopLoss) {
-                        outcome = 'loss';
-                        pnl = (signal.entry - signal.stopLoss) / signal.entry * 100;
+                if (!signal.binanceOrderId) {
+                     if (signal.expiresAt && Date.now() > new Date(signal.expiresAt).getTime()) {
+                         outcome = 'expired';
+                     } else {
+                         const diffPercent = Math.abs(price - signal.entry) / signal.entry;
+                         let isEntryHit = false;
+                         if (signal.trend === 'bullish' && price <= signal.entry) isEntryHit = true;
+                         if (signal.trend === 'bearish' && price >= signal.entry) isEntryHit = true;
+                         if (diffPercent <= 0.0025) isEntryHit = true;
+                         
+                         if (isEntryHit) {
+                             try {
+                                 const tradeAmountDollars = signal.amount || 10;
+                                 const leverage = 10;
+                                 const positionSizeUsdt = tradeAmountDollars * leverage;
+                                 const quantity = (positionSizeUsdt / price).toFixed(3);
+                                 const side = signal.trend === 'bullish' ? 'BUY' : 'SELL';
+                                 
+                                 const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET');
+                                 signal.binanceOrderId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+                                 signal.quantityExecuted = quantity;
+                                 await signal.save();
+                                 console.log(`[Binance] Executed Pending Entry: ${side} ${quantity} ${signal.symbol}`);
+                             } catch(e: any) {
+                                  console.error(`[Binance Entry Error] ${signal.symbol}:`, e.message);
+                             }
+                             continue;
+                         }
+                     }
+                }
+                
+                if (signal.binanceOrderId) {
+                    if (signal.trend === 'bullish') {
+                        if (price >= signal.target) {
+                            outcome = 'win';
+                            pnl = (signal.target - signal.entry) / signal.entry * 100;
+                        } else if (price <= signal.stopLoss) {
+                            outcome = 'loss';
+                            pnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
+                        }
+                    } else if (signal.trend === 'bearish') {
+                        if (price <= signal.target) {
+                            outcome = 'win';
+                            pnl = (signal.entry - signal.target) / signal.entry * 100;
+                        } else if (price >= signal.stopLoss) {
+                            outcome = 'loss';
+                            pnl = (signal.entry - signal.stopLoss) / signal.entry * 100;
+                        }
                     }
                 }
                 
