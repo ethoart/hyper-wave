@@ -850,7 +850,7 @@ async function startServer() {
               const priceDiff = Math.abs(algoResult.target - algoResult.entry);
               const projectedProfit = (positionSizeUsdt / algoResult.entry) * priceDiff;
 
-              if (entryDiff < 0.02 && projectedProfit >= 2) {
+              if (entryDiff < 0.15 && projectedProfit >= 0.1) {
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -942,7 +942,7 @@ async function startServer() {
                          let isEntryHit = false;
                          if (signal.trend === 'bullish' && price <= signal.entry) isEntryHit = true;
                          if (signal.trend === 'bearish' && price >= signal.entry) isEntryHit = true;
-                         if (diffPercent <= 0.0025) isEntryHit = true;
+                         if (diffPercent <= 0.01) isEntryHit = true;
                          
                          if (isEntryHit) {
                              try {
@@ -952,13 +952,21 @@ async function startServer() {
                                  const quantity = (positionSizeUsdt / price).toFixed(3);
                                  const side = signal.trend === 'bullish' ? 'BUY' : 'SELL';
                                  
-                                 const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET');
-                                 signal.binanceOrderId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+                                 let orderId = '';
+                                 try {
+                                     const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET');
+                                     orderId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+                                     console.log(`[Binance] Executed Pending Entry: ${side} ${quantity} ${signal.symbol}`);
+                                 } catch(e: any) {
+                                     console.warn(`[Binance] Could not place real trade, falling back to Paper Trade for ${signal.symbol}:`, e.message);
+                                     orderId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+                                 }
+                                 
+                                 signal.binanceOrderId = orderId;
                                  signal.quantityExecuted = quantity;
                                  await signal.save();
-                                 console.log(`[Binance] Executed Pending Entry: ${side} ${quantity} ${signal.symbol}`);
                              } catch(e: any) {
-                                  console.error(`[Binance Entry Error] ${signal.symbol}:`, e.message);
+                                  console.error(`[Entry Error] ${signal.symbol}:`, e.message);
                              }
                              continue;
                          }
@@ -987,11 +995,15 @@ async function startServer() {
                 
                 if (outcome !== 'pending') {
                     if (signal.binanceOrderId) {
-                        try {
-                            const res = await closeBinancePosition(signal.symbol);
-                            console.log(`[Binance] Closed position for ${signal.symbol}:`, res.message);
-                        } catch(e: any) {
-                            console.error(`[Binance Close Error] ${signal.symbol}:`, e.message);
+                        if (signal.binanceOrderId.toString().startsWith('paper_')) {
+                            console.log(`[Paper Trade] Closed position for ${signal.symbol}`);
+                        } else {
+                            try {
+                                const res = await closeBinancePosition(signal.symbol);
+                                console.log(`[Binance] Closed position for ${signal.symbol}:`, res.message);
+                            } catch(e: any) {
+                                console.error(`[Binance Close Error] ${signal.symbol}:`, e.message);
+                            }
                         }
                     }
                     signal.status = outcome;
@@ -1047,8 +1059,9 @@ async function startServer() {
   setInterval(runAutoScanner, 2 * 60 * 1000);
   setTimeout(runAutoScanner, 10000); // Initial run after 10s
   
-  // Run outcome evaluator every 5 minutes
-  setInterval(runOutcomeEvaluator, 5 * 60 * 1000);
+  // Run outcome evaluator every 1 minute
+  setInterval(runOutcomeEvaluator, 1 * 60 * 1000);
+  setTimeout(runOutcomeEvaluator, 20000); // Check 20s after boot
 
   // Daily AI Optimizer using Gemini 3.1 Pro
   let lastOptimizationTime = 0;

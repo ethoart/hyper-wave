@@ -33,7 +33,7 @@ export function Dashboard() {
   }, [interval]);
   
   const [watchlist, setWatchlist] = useState<Array<{symbol: string, pinned: boolean, timestamp: number}>>([]);
-  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades' | 'indexes'>('watchlist');
+  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades' | 'market'>('watchlist');
   const [additionalCharts, setAdditionalCharts] = useState<Array<{symbol: string, interval: string}>>([]);
   
   const [drawingColor, setDrawingColor] = useState('#2962ff');
@@ -110,6 +110,44 @@ export function Dashboard() {
 
   const [walletAddress, setWalletAddress] = useState<string>('');
   const [buyingPro, setBuyingPro] = useState(false);
+
+  const [fng, setFng] = useState<{value: number, classification: string} | null>(null);
+  const [orderBook, setOrderBook] = useState<{bids: any[], asks: any[]}>({bids: [], asks: []});
+
+  useEffect(() => {
+     // Fetch Fear and Greed
+     axios.get('https://api.alternative.me/fng/?limit=1').then(res => {
+         if (res.data && res.data.data && res.data.data.length > 0) {
+             const data = res.data.data[0];
+             setFng({ value: parseInt(data.value), classification: data.value_classification });
+         }
+     }).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+     let active = true;
+     const fetchOrderBook = async () => {
+         if (!symbol) return;
+         try {
+             // using fapi to match the pair data we are querying
+             const res = await axios.get(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=15`);
+             if (active) {
+                 setOrderBook({
+                     bids: res.data.bids || [],
+                     asks: res.data.asks || []
+                 });
+             }
+         } catch(err) {
+             // ignore
+         }
+     };
+     fetchOrderBook();
+     const intervalId = setInterval(fetchOrderBook, 2000); // Poll every 2 seconds for fresh order book
+     return () => {
+         active = false;
+         clearInterval(intervalId);
+     };
+  }, [symbol]);
 
   const connectWallet = async () => {
     // @ts-ignore
@@ -630,13 +668,13 @@ export function Dashboard() {
   return (
     <div className="h-[100dvh] w-screen bg-[#000] text-[#d1d4dc] flex flex-col font-sans overflow-hidden">
       {/* Top Header */}
-      <header className="h-[52px] md:h-14 border-b border-[#2a2e39] flex justify-between items-center px-3 md:px-4 bg-[#131722] shrink-0 w-full z-30">
-        <div className="hidden lg:flex items-center text-xs text-[#089981] font-mono mr-4 gap-4">
+      <header className="h-[52px] md:h-14 border-b border-[#2a2e39] flex justify-between items-center px-2 md:px-3 bg-[#131722] shrink-0 w-full z-30 gap-1 lg:gap-2">
+        <div className="hidden 2xl:flex items-center text-xs text-[#089981] font-mono mr-2 gap-4 flex-shrink-0">
           <span>Live: {liveCandle?.close || '-'}</span>
           <span>Ticks: {tickCount}</span>
         </div>
         {/* Left section: App Name & Mobile menu */}
-        <div className="flex items-center gap-3 md:gap-4 flex-shrink-0">
+        <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
           <button 
              className="lg:hidden p-1.5 text-[#787b86] hover:text-white rounded border border-[#2a2e39] bg-[#1e222d]"
              onClick={() => setShowRightSidebar(true)}
@@ -644,32 +682,33 @@ export function Dashboard() {
              <Menu className="w-5 h-5" />
           </button>
           
-          <div className="font-bold text-white text-base md:text-lg tracking-tight italic">Hyper Wave</div>
-          <div className="h-5 w-[1px] bg-[#2a2e39] hidden md:block"></div>
+          <div className="font-bold text-white text-sm md:text-lg tracking-tight italic whitespace-nowrap hidden sm:block">Hyper Wave</div>
+          <div className="font-bold text-white text-base tracking-tight italic whitespace-nowrap sm:hidden">HW</div>
+          <div className="h-5 w-[1px] bg-[#2a2e39] hidden lg:block"></div>
         </div>
 
         {/* Middle section: Desktop Search & Timeframe */}
-        <div className="hidden lg:flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-[#1e222d] px-2 py-1 rounded">
-            <Search className="w-4 h-4 text-[#787b86]" />
+        <div className="hidden lg:flex items-center gap-1 xl:gap-2 flex-1 min-w-0 justify-center overflow-hidden">
+          <div className="flex items-center gap-2 bg-[#1e222d] px-2 py-1 rounded w-[100px] xl:w-[120px] flex-shrink-0">
+            <Search className="w-4 h-4 text-[#787b86] flex-shrink-0" />
             <input 
               value={symbolInput}
               onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && setSymbol(symbolInput)}
               onBlur={() => setSymbol(symbolInput)}
-              className="bg-transparent border-none outline-none text-[#d1d4dc] w-24 text-sm font-medium focus:ring-0 uppercase placeholder:text-[#363a45]"
+              className="bg-transparent border-none outline-none text-[#d1d4dc] w-full text-xs xl:text-sm font-medium focus:ring-0 uppercase placeholder:text-[#363a45]"
               placeholder="SYMBOL"
             />
           </div>
           
-          <div className="h-5 w-[1px] bg-[#2a2e39] mx-2"></div>
+          <div className="h-5 w-[1px] bg-[#2a2e39] mx-1 flex-shrink-0"></div>
           
-          <div className="flex items-center space-x-1 overflow-x-auto hide-scrollbar max-w-[250px] md:max-w-none">
-             {['1m', '5m', '15m', '1h', '4h', '1d', '1w', '1M'].map(tf => (
+          <div className="flex items-center space-x-1 overflow-x-auto hide-scrollbar min-w-0">
+             {['1m', '5m', '15m', '1h', '4h', '1d', '1w'].map(tf => (
                <button 
                  key={tf}
                  onClick={() => setChartInterval(tf)}
-                 className={`px-2 py-1 text-xs md:text-sm rounded transition-colors ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:bg-[#2a2e39]'}`}
+                 className={`px-1.5 xl:px-2 py-1 flex-shrink-0 text-xs rounded transition-colors ${tf === interval ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:bg-[#2a2e39]'}`}
                >
                  {tf}
                </button>
@@ -678,7 +717,7 @@ export function Dashboard() {
         </div>
 
         {/* Right section: Admin Tools + Context + User */}
-        <div className="flex items-center gap-1.5 md:gap-3 flex-shrink-0">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 justify-end">
           <button 
             title="Add Split Chart"
              onClick={() => setAdditionalCharts([...additionalCharts, { symbol, interval }])}
@@ -716,7 +755,7 @@ export function Dashboard() {
                  <button 
                     onClick={handleScanBestPair} 
                     disabled={scanning}
-                    className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-[#1e222d] border border-[#2a2e39] hover:bg-[#2a2e39] text-[#2962ff] text-sm font-medium rounded transition-colors"
+                    className="hidden lg:flex items-center gap-1.5 px-2 xl:px-3 py-1.5 bg-[#1e222d] border border-[#2a2e39] hover:bg-[#2a2e39] text-[#2962ff] text-sm font-medium rounded transition-colors whitespace-nowrap"
                  >
                     {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                     <span className="hidden xl:inline">Auto Select Pair</span>
@@ -725,7 +764,7 @@ export function Dashboard() {
                  <button 
                     onClick={handleGenerate} 
                     disabled={generating || loadingConfig}
-                    className="hidden lg:flex items-center gap-1.5 px-3 lg:px-4 py-1.5 bg-[#2962ff] hover:bg-[#1e53e5] text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+                    className="hidden lg:flex items-center gap-1.5 px-2 xl:px-4 py-1.5 bg-[#2962ff] hover:bg-[#1e53e5] text-white text-sm font-medium rounded transition-colors disabled:opacity-50 whitespace-nowrap"
                  >
                     {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
                     <span className="hidden xl:inline">Auto Analyze</span>
@@ -997,10 +1036,10 @@ plot(close)"
                      Trades
                    </button>
                    <button 
-                     onClick={() => setRightSidebarTab('indexes')}
-                     className={`flex-1 py-3 text-[10px] sm:text-xs uppercase font-bold tracking-wider border-b-2 transition-colors ${rightSidebarTab === 'indexes' ? 'border-[#2962ff] text-white' : 'border-transparent text-[#787b86] hover:text-[#d1d4dc]'}`}
+                     onClick={() => setRightSidebarTab('market')}
+                     className={`flex-1 py-3 text-[10px] sm:text-xs uppercase font-bold tracking-wider border-b-2 transition-colors flex items-center justify-center gap-1 ${rightSidebarTab === 'market' ? 'border-[#2962ff] text-white' : 'border-transparent text-[#787b86] hover:text-[#d1d4dc]'}`}
                    >
-                     Indexes
+                     Order Book
                    </button>
                 </div>
                 
@@ -1099,36 +1138,74 @@ plot(close)"
                            )}
                          </div>
                       </div>
-                   ) : rightSidebarTab === 'indexes' ? (
+                   ) : rightSidebarTab === 'market' ? (
                       <div className="flex flex-col gap-4">
                          <div>
-                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Fear & Greed Index</div>
+                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase flex items-center justify-between">
+                               <span>Fear & Greed</span>
+                            </div>
                             <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-4 flex flex-col items-center">
                                <div className="relative w-32 h-16 overflow-hidden rounded-t-full bg-[#131722] mb-4">
                                   <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-[#2a2e39]" />
                                   <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-t-transparent border-r-[transparent] border-l-[#f23645] border-b-[#089981] rotate-[-45deg]" />
-                                  <div className="absolute bottom-0 left-1/2 w-2 h-16 origin-bottom transform -translate-x-1/2 rotate-[15deg]">
+                                  <div className="absolute bottom-0 left-1/2 w-2 h-16 origin-bottom transform -translate-x-1/2" style={{ rotate: `${(fng?.value || 50) * 1.8 - 90}deg`, transition: 'rotate 1s ease-out' }}>
                                      <div className="w-1.5 h-10 bg-white rounded-t-full mx-auto shadow" />
                                      <div className="w-3 h-3 bg-white rounded-full mx-auto -mt-1" />
                                   </div>
                                </div>
-                               <div className="text-2xl font-black text-white">68</div>
-                               <div className="text-sm font-bold text-[#089981]">GREED</div>
-                               <div className="text-[10px] text-[#787b86] mt-2 text-center">Indication of current market sentiment (Mock data for display)</div>
+                               <div className="text-2xl font-black text-white">{fng?.value || '-'}</div>
+                               <div className="text-sm font-bold" style={{ color: fng?.value ? (fng.value > 50 ? '#089981' : '#f23645') : '#787b86' }}>{fng?.classification?.toUpperCase() || 'LOADING'}</div>
+                               <div className="text-[10px] text-[#787b86] mt-2 text-center">Current market sentiment</div>
                             </div>
                          </div>
-                         <div>
-                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Altcoin Season Index</div>
-                            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-4 flex flex-col items-center">
-                               <div className="w-full flex justify-between text-xs text-[#787b86] mb-1 font-bold">
-                                  <span>Bitcoin Season</span>
-                                  <span>Altcoin Season</span>
+                         <div className="flex-1 flex flex-col min-h-0">
+                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase flex items-center justify-between">
+                               <span>Order Book</span>
+                               <span className="text-[#787b86] font-normal">{symbol}</span>
+                            </div>
+                            <div className="flex flex-col flex-1 bg-[#1e222d] border border-[#2a2e39] rounded overflow-hidden text-xs">
+                               <div className="flex w-full text-[#787b86] p-2 border-b border-[#2a2e39]">
+                                  <div className="flex-1">Price</div>
+                                  <div className="flex-1 text-right">Amount</div>
+                                  <div className="flex-1 text-right">Total</div>
                                </div>
-                               <div className="w-full h-2 rounded bg-[#131722] overflow-hidden mb-2 border border-[#2a2e39]">
-                                  <div className="h-full bg-gradient-to-r from-[#f59e0b] to-[#2962ff] w-[42%]" />
+                               <div className="flex flex-col flex-1 overflow-y-auto hide-scrollbar">
+                                   <div className="flex flex-col justify-end p-1 min-h-[120px]">
+                                       {[...orderBook.asks].reverse().map((ask, i) => {
+                                           const maxVol = Math.max(...orderBook.asks.map(a => parseFloat(a[1])), 1);
+                                           const w = (parseFloat(ask[1]) / maxVol) * 100;
+                                           return (
+                                               <div key={`ask-${i}`} className="flex w-full py-0.5 relative group">
+                                                  <div className="absolute right-0 top-0 bottom-0 bg-[#f23645]/10 z-0 transition-all" style={{ width: `${w}%` }} />
+                                                  <div className="flex-1 text-[#f23645] z-10 pl-1">{parseFloat(ask[0]).toFixed(2)}</div>
+                                                  <div className="flex-1 text-right text-white z-10">{parseFloat(ask[1]).toFixed(4)}</div>
+                                                  <div className="flex-1 text-right text-[#787b86] z-10 pr-1">{(parseFloat(ask[0]) * parseFloat(ask[1])).toFixed(2)}</div>
+                                               </div>
+                                           );
+                                       })}
+                                   </div>
+                                   
+                                   <div className="flex items-center justify-center p-2 border-y border-[#2a2e39] bg-[#131722]">
+                                      <span className="text-white font-bold text-sm" style={{ color: liveCandle?.close >= liveCandle?.open ? '#089981' : '#f23645' }}>
+                                         {liveCandle?.close || '-'}
+                                      </span>
+                                   </div>
+
+                                   <div className="flex flex-col justify-start p-1 min-h-[120px]">
+                                       {orderBook.bids.map((bid, i) => {
+                                           const maxVol = Math.max(...orderBook.bids.map(b => parseFloat(b[1])), 1);
+                                           const w = (parseFloat(bid[1]) / maxVol) * 100;
+                                           return (
+                                               <div key={`bid-${i}`} className="flex w-full py-0.5 relative group">
+                                                  <div className="absolute right-0 top-0 bottom-0 bg-[#089981]/10 z-0 transition-all" style={{ width: `${w}%` }} />
+                                                  <div className="flex-1 text-[#089981] z-10 pl-1">{parseFloat(bid[0]).toFixed(2)}</div>
+                                                  <div className="flex-1 text-right text-white z-10">{parseFloat(bid[1]).toFixed(4)}</div>
+                                                  <div className="flex-1 text-right text-[#787b86] z-10 pr-1">{(parseFloat(bid[0]) * parseFloat(bid[1])).toFixed(2)}</div>
+                                               </div>
+                                           );
+                                       })}
+                                   </div>
                                </div>
-                               <div className="text-xl font-black text-white">42</div>
-                               <div className="text-xs text-[#f59e0b]">Bitcoin Season</div>
                             </div>
                          </div>
                       </div>

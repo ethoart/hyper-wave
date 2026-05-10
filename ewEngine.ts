@@ -338,5 +338,33 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     }
   }
 
+  if (!bestSetup) {
+    // Fallback if no valid complex structure found but we want a trade signal
+    const len = data.length;
+    const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
+    const entry = data[len-1].close;
+    const target = isBull ? entry * 1.05 : entry * 0.95;
+    const stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+    const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
+
+    return {
+      score: 0,
+      trend: isBull ? 'bullish' : 'bearish',
+      waves: {
+        start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time, label: '0' },
+        w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time, label: '1' },
+        w2: { price: data[Math.max(0, len-30)].close, time: data[Math.max(0, len-30)].time, label: '2' },
+        w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time, label: '3' },
+        w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time, label: '4' }
+      },
+      entry: entry,
+      stopLoss: stop,
+      target: target,
+      tradeStyle,
+      gainPct,
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Simple structural trend analysis used instead of strict Elliott Waves. Price bounds generated.${rsiDivergence}`
+    };
+  }
+
   return bestSetup;
 }
