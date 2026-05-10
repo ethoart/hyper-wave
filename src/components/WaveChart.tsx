@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries, LineSeries, HistogramSeries, CrosshairMode } from 'lightweight-charts';
 import { computeRSI, computeSMA, computeBB, computeEMA, computeMACD } from '../lib/indicators';
+import { Search, Plus, ShoppingCart, User, Code, X } from 'lucide-react';
+import axios from 'axios';
+import { ethers } from 'ethers';
 
 interface ChartProps {
   data: any[];
+  symbol?: string;
+  interval?: string;
   liveCandle?: any;
   entryPoint?: number;
   exitPoint?: number;
@@ -25,7 +30,7 @@ const AVAILABLE_INDICATORS = [
   { id: 'macd', name: 'MACD', defaultOptions: { fast: 12, slow: 26, signal: 9 }, description: 'Moving Avg Convergence Divergence' },
 ];
 
-export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0, channelPoints, flagPoints }: ChartProps) {
+export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0, channelPoints, flagPoints }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const macdContainerRef = useRef<HTMLDivElement>(null);
@@ -34,7 +39,82 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     rsi: true,
   });
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [marketplaceItems, setMarketplaceItems] = useState<any[]>([]);
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [showCustomPineEditor, setShowCustomPineEditor] = useState(false);
+  const [newScript, setNewScript] = useState({ name: '', description: '', code: '//@version=5\nindicator("My Custom Script")\n\nplot(close)', type: 'indicator', priceUSDC: 0 });
+  const [submittingScript, setSubmittingScript] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handlePublishScript = async () => {
+    if (!newScript.name || !newScript.code) return alert("Name and Code are required");
+    setSubmittingScript(true);
+    try {
+      const res = await axios.post('/api/marketplace', newScript);
+      setMarketplaceItems([res.data, ...marketplaceItems]);
+      setShowCustomPineEditor(false);
+      setNewScript({ name: '', description: '', code: '//@version=5\nindicator("My Custom Script")\n\nplot(close)', type: 'indicator', priceUSDC: 0 });
+    } catch(err: any) {
+      alert("Failed to publish: " + (err.response?.data?.error || err.message));
+    }
+    setSubmittingScript(false);
+  };
+
+  const handleBuyScript = async (item: any) => {
+     try {
+       if (item.priceUSDC && item.priceUSDC > 0) {
+          // @ts-ignore
+          if (typeof window === 'undefined' || typeof window.ethereum === 'undefined') {
+              return alert("Please install a Web3 wallet (like MetaMask) to purchase with USDC.");
+          }
+          // @ts-ignore
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          const signer = await provider.getSigner();
+          const address = await signer.getAddress();
+          
+          const network = await provider.getNetwork();
+          if (network.chainId !== 8453n && network.chainId !== BigInt(8453)) {
+              try {
+                  // @ts-ignore
+                  await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
+              } catch (e) {
+                  return alert("Please switch to Base Network to use USDC.");
+              }
+          }
+          
+          const usdcAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base USDC
+          const contractAddress = "0x000000000000000000000000000000000000dEaD"; // Default demo treasury
+          const amt = ethers.parseUnits(item.priceUSDC.toString(), 6);
+          
+          const erc20Abi = ["function balanceOf(address) view returns (uint256)", "function transfer(address, uint256) returns (bool)"];
+          const tokenContract = new ethers.Contract(usdcAddress, erc20Abi, signer);
+          
+          const currentBalance = await tokenContract.balanceOf(address);
+          if (currentBalance < amt) {
+              return alert(`Insufficient USDC balance. You need at least ${item.priceUSDC} USDC on Base.`);
+          }
+          
+          alert("Please confirm the USDC transfer transaction in your wallet.");
+          const tx = await tokenContract.transfer(contractAddress, amt);
+          await tx.wait();
+       }
+       
+       const res = await axios.post('/api/marketplace/buy', { id: item._id });
+       alert(res.data.message);
+       // Refresh marketplace items to see it owned
+       const updated = await axios.get('/api/marketplace');
+       setMarketplaceItems(updated.data);
+     } catch (err: any) {
+       alert("Failed to buy: " + (err.response?.data?.error || err.message));
+     }
+  };
+
+  useEffect(() => {
+    // Fetch marketplace items
+    axios.get('/api/marketplace').then(res => setMarketplaceItems(res.data)).catch(console.error);
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -59,6 +139,117 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
   const auxiliarySeriesRef = useRef<ISeriesApi<"Line">[]>([]);
   const targetPriceLinesRef = useRef<any[]>([]);
   const completedShapesRef = useRef<Array<{ series: any[], priceLines: any[] }>>([]);
+  const serializedDrawingsRef = useRef<any[]>([]);
+
+  // Function to save drawings
+  const saveChartDrawings = async () => {
+     if (!symbol) return alert("Must have a symbol to save");
+     try {
+       await axios.post(`/api/drawings/${symbol}?interval=${interval || '1d'}`, {
+         drawings: serializedDrawingsRef.current
+       }, { headers: { Authorization: `Bearer ${localStorage.getItem('hyperwave_token')}` }});
+       alert("Chart drawings saved!");
+     } catch (err: any) {
+       alert("Failed to save: " + (err.response?.data?.error || err.message));
+     }
+  };
+
+  const shareChartDrawings = async () => {
+     if (!symbol) return;
+     try {
+       const res = await axios.post(`/api/drawings/share/${symbol}?interval=${interval || '1d'}`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem('hyperwave_token')}` }});
+       const url = `${window.location.origin}/chart/${res.data.shareId}`;
+       navigator.clipboard.writeText(url);
+       alert("Link copied to clipboard!\n" + url);
+     } catch(err: any) {
+       alert("Failed to share: " + (err.response?.data?.error || err.message));
+     }
+  };
+
+  // Function to reconstruct abstract shapes
+  const reconstructShape = (chart: IChartApi, candleSeries: ISeriesApi<"Candlestick">, shape: any) => {
+     let userSrs = chart.addSeries(LineSeries, {
+         color: shape.color, lineWidth: 2, lineStyle: 0,
+         crosshairMarkerVisible: true, lastValueVisible: false, priceLineVisible: false
+     });
+     let auxSeries: any[] = [];
+     let pLines: any[] = [];
+
+     if (shape.tool === 'measure' && shape.points.length === 2) {
+         userSrs.setData(shape.points);
+         const p1 = shape.points[0];
+         const p2 = shape.points[1];
+         const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
+         userSrs.setMarkers([{
+             time: p2.time, position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+             color: pct.startsWith('-') ? '#f23645' : '#089981',
+             shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp', text: `${pct}% / ${p2.value.toFixed(2)}`
+         }]);
+     } else if (shape.tool === 'fibonacci' && shape.points.length === 2) {
+         userSrs.setData(shape.points);
+         const p1 = shape.points[0]; const p2 = shape.points[1];
+         const diff = p2.value - p1.value;
+         const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
+         const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
+         levels.forEach((l, i) => {
+             const pl = candleSeries.createPriceLine({
+                 price: p1.value + diff * l, color: colors[i] || shape.color,
+                 lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `Fib ${l}`
+             });
+             pLines.push(pl);
+         });
+     } else if (shape.tool === 'rectangle' && shape.points.length === 2) {
+         const p1 = shape.points[0]; const p2 = shape.points[1];
+         const topSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+         const botSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+         topSrs.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }]);
+         botSrs.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }]);
+         auxSeries.push(topSrs, botSrs);
+         userSrs.setMarkers([
+            { time: p1.time, position: 'inBar', color: shape.color, shape: 'square', text: '' },
+            { time: p2.time, position: 'inBar', color: shape.color, shape: 'square', text: '' }
+         ]);
+     } else if (shape.tool === 'parallel' && shape.points.length === 3) {
+         const p1 = shape.points[0]; const p2 = shape.points[1]; const p3 = shape.points[2];
+         const slope = (p2.value - p1.value) / (p2.time - p1.time);
+         const newIntercept = p3.value - slope * p3.time;
+         const parLine = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
+         parLine.setData([{ time: p1.time, value: slope * p1.time + newIntercept }, { time: p2.time, value: slope * p2.time + newIntercept }]);
+         auxSeries.push(parLine);
+         userSrs.setData([p1, p2]);
+     } else {
+         userSrs.setData(shape.points); // trend, pen, etc
+     }
+
+     completedShapesRef.current.push({ series: [userSrs, ...auxSeries].filter(Boolean), priceLines: pLines });
+  };
+
+  useEffect(() => {
+     if (!symbol) return;
+     let isMounted = true;
+     axios.get(`/api/drawings/${symbol}?interval=${interval || '1d'}`, {
+         headers: { Authorization: `Bearer ${localStorage.getItem('hyperwave_token')}` }
+     }).then(res => {
+         if (isMounted && res.data && Array.isArray(res.data)) {
+            serializedDrawingsRef.current = res.data;
+            if (chartRef.current && candlestickSeriesRef.current) {
+                // reconstruct them
+                res.data.forEach(shape => reconstructShape(chartRef.current!, candlestickSeriesRef.current!, shape));
+            } else {
+               // wait and check interval
+               let attempts = 0;
+               let intv = setInterval(() => {
+                  if (chartRef.current && candlestickSeriesRef.current) {
+                     clearInterval(intv);
+                     res.data.forEach((shape: any) => reconstructShape(chartRef.current!, candlestickSeriesRef.current!, shape));
+                  }
+                  if (attempts++ > 10) clearInterval(intv);
+               }, 200);
+            }
+         }
+     }).catch(console.error);
+     return () => { isMounted = false; };
+  }, [symbol, interval]);
 
   useEffect(() => {
     if (liveCandle && chartRef.current && candlestickSeriesRef.current) {
@@ -133,6 +324,16 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
     
     chartRef.current = chart;
 
+    let precision = 2;
+    let minMove = 0.01;
+    if (formattedData.length > 0) {
+       const avgPrice = formattedData[0].close;
+       if (avgPrice < 0.00001) { precision = 8; minMove = 0.00000001; }
+       else if (avgPrice < 0.001) { precision = 6; minMove = 0.000001; }
+       else if (avgPrice < 1) { precision = 4; minMove = 0.0001; }
+       else if (avgPrice > 1000) { precision = 2; minMove = 0.1; }
+    }
+
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#089981',
       downColor: '#f23645',
@@ -141,8 +342,8 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
       wickDownColor: '#f23645',
       priceFormat: {
         type: 'price',
-        precision: 4,
-        minMove: 0.0001,
+        precision: precision,
+        minMove: minMove,
       }
     });
     candlestickSeries.setData(formattedData);
@@ -517,6 +718,12 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
                    priceLines: [...targetPriceLinesRef.current]
                 });
                 
+                serializedDrawingsRef.current.push({
+                   tool: activeTool,
+                   color: drawingColor,
+                   points: [...userDrawings.current]
+                });
+                
                 userDrawings.current = [];
                 auxiliarySeriesRef.current = [];
                 targetPriceLinesRef.current = [];
@@ -646,12 +853,25 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
         </button>
         
         {showIndicatorMenu && (
-          <div className="absolute top-10 left-0 w-64 bg-[#1e222d] border border-[#2a2e39] rounded shadow-xl overflow-hidden pointer-events-auto flex flex-col">
-            <div className="px-3 py-2 border-b border-[#2a2e39] font-medium text-xs text-[#787b86] uppercase tracking-wider">
-              Indicator Library
+          <div className="absolute top-10 left-0 w-80 bg-[#1e222d] border border-[#2a2e39] rounded shadow-xl overflow-hidden pointer-events-auto flex flex-col z-[100]">
+            <div className="flex border-b border-[#2a2e39]">
+               <button onClick={() => setShowMarketplace(false)} className={`flex-1 py-2 text-xs font-medium text-center ${!showMarketplace ? 'text-white border-b-2 border-blue-500' : 'text-[#787b86] hover:text-white'}`}>Library</button>
+               <button onClick={() => setShowMarketplace(true)} className={`flex-1 py-2 text-xs font-medium text-center ${showMarketplace ? 'text-white border-b-2 border-blue-500' : 'text-[#787b86] hover:text-white'}`}>Marketplace</button>
             </div>
+            
+            <div className="p-2 border-b border-[#2a2e39] flex items-center bg-[#131722]">
+               <Search className="w-4 h-4 text-[#787b86] mr-2" />
+               <input 
+                  type="text" 
+                  placeholder={showMarketplace ? "Search community scripts..." : "Search indicators..."} 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-transparent border-none outline-none text-sm text-[#d1d4dc] w-full"
+               />
+            </div>
+
             <div className="max-h-[300px] overflow-y-auto">
-              {AVAILABLE_INDICATORS.map(ind => (
+              {!showMarketplace && AVAILABLE_INDICATORS.filter(ind => ind.name.toLowerCase().includes(searchQuery.toLowerCase()) || ind.description.toLowerCase().includes(searchQuery.toLowerCase())).map(ind => (
                 <div 
                   key={ind.id} 
                   onClick={() => toggleIndicator(ind.id)}
@@ -670,17 +890,139 @@ export function WaveChart({ data, liveCandle, entryPoint, exitPoint, stopLoss, w
                   </div>
                 </div>
               ))}
+              
+              {showMarketplace && marketplaceItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase())).map(item => (
+                 <div key={item._id} className="px-3 py-2.5 flex items-center justify-between hover:bg-[#2a2e39] transition-colors border-b border-[#2a2e39]/50 last:border-0">
+                    <div className="flex flex-col">
+                      <span className="text-sm text-yellow-400 font-medium flex items-center gap-1"><Code className="w-3 h-3"/> {item.name}</span>
+                      <span className="text-[10px] text-[#787b86] mt-0.5">By {item.author || 'Anonymous'} • {item.type}</span>
+                    </div>
+                    <button onClick={() => handleBuyScript(item)} className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                       <ShoppingCart className="w-3 h-3" />
+                       {item.priceUSDC > 0 ? `${item.priceUSDC} USDC` : 'Free'}
+                    </button>
+                 </div>
+              ))}
+              
+              {showMarketplace && marketplaceItems.length === 0 && (
+                 <div className="p-4 text-center text-xs text-[#787b86]">No community scripts found.</div>
+              )}
+            </div>
+            
+            <div className="p-2 border-t border-[#2a2e39] bg-[#1a1e26]">
+               <button onClick={() => setShowCustomPineEditor(true)} className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium rounded hover:bg-blue-400/10 transition-colors">
+                  <Plus className="w-3.5 h-3.5" />
+                  Create Custom Script (Pine)
+               </button>
             </div>
           </div>
         )}
       </div>
 
       <div className="w-full flex-1 relative min-h-0" ref={chartContainerRef} />
+      
+      {/* Fullscreen & Additional buttons */}
+      <div className="absolute top-2 right-14 z-[9] flex gap-2">
+         {symbol && (
+            <>
+              <button 
+                 onClick={() => {
+                    // if pen tool is active, push its current path before saving
+                    if (activeTool === 'pen' && userDrawings.current.length > 0 && userSeriesRef.current) {
+                        completedShapesRef.current.push({ series: [userSeriesRef.current], priceLines: [] });
+                        serializedDrawingsRef.current.push({ tool: 'pen', color: drawingColor, points: [...userDrawings.current] });
+                        userDrawings.current = [];
+                        userSeriesRef.current = chartRef.current?.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: true, lastValueVisible: false, priceLineVisible: false }) || null;
+                    }
+                    saveChartDrawings();
+                 }}
+                 className="p-1.5 text-[#787b86] hover:bg-[#2962ff] hover:text-white rounded bg-[#1e222d] border border-[#2a2e39] transition-colors text-xs font-bold"
+                 title="Save Chart"
+              >
+                 SAVE
+              </button>
+              <button 
+                 onClick={shareChartDrawings}
+                 className="p-1.5 text-[#787b86] hover:bg-[#2962ff] hover:text-white rounded bg-[#1e222d] border border-[#2a2e39] transition-colors text-xs font-bold"
+                 title="Share Chart"
+              >
+                 SHARE
+              </button>
+            </>
+         )}
+      </div>
+      <button 
+         onClick={() => {
+            if (chartContainerRef.current) {
+               if (document.fullscreenElement) {
+                  document.exitFullscreen();
+               } else {
+                  chartContainerRef.current.parentElement?.requestFullscreen();
+               }
+            }
+         }}
+         className="absolute top-2 right-2 z-[9] p-1.5 text-[#787b86] hover:bg-[#2a2e39] hover:text-white rounded bg-[#1e222d] border border-[#2a2e39] transition-colors"
+         title="Toggle Fullscreen"
+      >
+         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+      </button>
+
       {activeIndicators.rsi && (
         <div className="w-full h-[150px] md:h-[100px] mt-2 relative border-t border-[#2a2e39]" ref={rsiContainerRef} />
       )}
       {activeIndicators.macd && (
         <div className="w-full h-[150px] md:h-[100px] mt-2 relative border-t border-[#2a2e39]" ref={macdContainerRef} />
+      )}
+
+      {showCustomPineEditor && (
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
+          <div className="bg-[#1e222d] border border-[#2a2e39] rounded shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-4 border-b border-[#2a2e39]">
+               <h2 className="text-white font-bold flex items-center gap-2"><Code className="w-5 h-5 text-blue-400"/> Pine Editor (BETA)</h2>
+               <button onClick={() => setShowCustomPineEditor(false)} className="text-[#787b86] hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-4">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-[#787b86] mb-1">Script Name</label>
+                  <input type="text" value={newScript.name} onChange={e => setNewScript({...newScript, name: e.target.value})} className="w-full bg-[#131722] border border-[#2a2e39] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="e.g., Ultimate RSI + MACD" />
+                </div>
+                <div className="w-1/3">
+                  <label className="block text-xs font-medium text-[#787b86] mb-1">Type</label>
+                  <select value={newScript.type} onChange={e => setNewScript({...newScript, type: e.target.value})} className="w-full bg-[#131722] border border-[#2a2e39] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                     <option value="indicator">Indicator</option>
+                     <option value="strategy">Strategy</option>
+                     <option value="signal">Signal Algorithm</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                 <label className="block text-xs font-medium text-[#787b86] mb-1">Pine Script v5 Code</label>
+                 <textarea value={newScript.code} onChange={e => setNewScript({...newScript, code: e.target.value})} className="w-full h-48 bg-[#131722] border border-[#2a2e39] rounded px-3 py-2 text-sm text-green-400 font-mono focus:outline-none focus:border-blue-500" />
+              </div>
+
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-[#787b86] mb-1">Description (Optional)</label>
+                  <input type="text" value={newScript.description} onChange={e => setNewScript({...newScript, description: e.target.value})} className="w-full bg-[#131722] border border-[#2a2e39] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Explain what this does..." />
+                </div>
+                <div className="w-1/3">
+                  <label className="block text-xs font-medium text-[#787b86] mb-1">Price (USDC Base)</label>
+                  <input type="number" min="0" step="1" value={newScript.priceUSDC} onChange={e => setNewScript({...newScript, priceUSDC: Number(e.target.value)})} className="w-full bg-[#131722] border border-[#2a2e39] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-[#2a2e39] flex justify-end gap-3 bg-[#131722] rounded-b">
+               <button onClick={() => setShowCustomPineEditor(false)} className="px-4 py-2 text-sm font-medium text-[#787b86] hover:text-white transition-colors">Cancel</button>
+               <button onClick={handlePublishScript} disabled={submittingScript} className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 flex items-center gap-2">
+                  {submittingScript ? 'Publishing...' : 'Publish to Marketplace'}
+               </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

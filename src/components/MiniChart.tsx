@@ -160,7 +160,7 @@ export function MiniChart({ symbol, interval, activeTool, onClose, onChange }: {
           <span className="text-xs mt-2 opacity-50">Checking valid interval or rate limits</span>
         </div>
       ) : (
-        <WaveChart data={data} liveCandle={liveCandle} activeTool={activeTool} />
+        <WaveChart symbol={symbol} interval={interval} data={data} liveCandle={liveCandle} activeTool={activeTool} />
       )}
     </div>
   );

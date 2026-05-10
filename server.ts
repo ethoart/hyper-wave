@@ -82,6 +82,27 @@ const engineConfigSchema = new mongoose.Schema({
 });
 const EngineConfig = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
 
+const scriptItemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: String,
+  author: String,
+  code: String,
+  type: { type: String, enum: ['indicator', 'strategy', 'signal'], default: 'indicator' },
+  priceUSDC: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  subscribers: [String] // emails of licensed users
+});
+const ScriptItem = mongoose.models.ScriptItem || mongoose.model('ScriptItem', scriptItemSchema);
+
+const chartDrawingSchema = new mongoose.Schema({
+  userEmail: { type: String, required: true },
+  symbol: { type: String, required: true },
+  interval: { type: String, default: '1d' },
+  drawings: mongoose.Schema.Types.Mixed,
+  updatedAt: { type: Date, default: Date.now }
+});
+const ChartDrawing = mongoose.models.ChartDrawing || mongoose.model('ChartDrawing', chartDrawingSchema);
 
 // -----------------------------------------------------
 // 2. Main Server Setup
@@ -270,6 +291,105 @@ async function startServer() {
 
   app.get('/api/auth/me', authMiddleware, (req: any, res) => {
     res.json({ user: req.user });
+  });
+
+  // Marketplace
+  app.get('/api/marketplace', async (req, res) => {
+    if (!isDbConnected) return res.json([]);
+    try {
+      const items = await ScriptItem.find().sort({ createdAt: -1 });
+      res.json(items);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/marketplace', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'DB not connected' });
+    try {
+      const item = await ScriptItem.create({
+        ...req.body,
+        author: req.user.email
+      });
+      res.json(item);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/marketplace/buy', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'DB not connected' });
+    try {
+      const { id } = req.body;
+      const item = await ScriptItem.findById(id);
+      if (!item) return res.status(404).json({ error: 'Not found' });
+      // In a real app, charge USDC via web3 here
+      if (!item.subscribers.includes(req.user.email)) {
+        item.subscribers.push(req.user.email);
+        await item.save();
+      }
+      res.json({ success: true, message: 'Licensed successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Chart Drawings
+  app.get('/api/drawings/:symbol', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.json([]);
+    try {
+      const { symbol } = req.params;
+      const { interval } = req.query;
+      const drawing = await ChartDrawing.findOne({ userEmail: req.user.email, symbol, interval: interval || '1d' });
+      res.json(drawing ? drawing.drawings : []);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/drawings/:symbol', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'DB not connected' });
+    try {
+      const { symbol } = req.params;
+      const { interval } = req.query;
+      const { drawings } = req.body;
+      
+      let drawing = await ChartDrawing.findOne({ userEmail: req.user.email, symbol, interval: interval || '1d' });
+      if (drawing) {
+        drawing.drawings = drawings;
+        drawing.updatedAt = new Date();
+        await drawing.save();
+      } else {
+        drawing = await ChartDrawing.create({ userEmail: req.user.email, symbol, interval: interval || '1d', drawings });
+      }
+      res.json(drawing);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/drawings/share/:id', async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'DB not connected' });
+    try {
+      const drawing = await ChartDrawing.findById(req.params.id);
+      if (!drawing) return res.status(404).json({ error: 'Shared chart not found' });
+      res.json(drawing);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/drawings/share/:symbol', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'DB not connected' });
+    try {
+      const { symbol } = req.params;
+      const { interval } = req.query;
+      const drawing = await ChartDrawing.findOne({ userEmail: req.user.email, symbol, interval: interval || '1d' });
+      if (!drawing) return res.status(404).json({ error: 'Save your chart first before sharing.' });
+      res.json({ shareId: drawing._id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Binance & Analysis Data

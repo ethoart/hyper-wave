@@ -8,7 +8,7 @@ import {
   MousePointer2, Crosshair, PenTool, TrendingUp, Search,
   PlayCircle, Loader2, List, Activity, Settings, LogOut, Code,
   Bell, BellRing, DollarSign, Send, Menu, X, PlusSquare,
-  AlignJustify, Square, Ruler, Spline
+  AlignJustify, Square, Ruler, Spline, PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ethers } from 'ethers';
@@ -33,7 +33,7 @@ export function Dashboard() {
   }, [interval]);
   
   const [watchlist, setWatchlist] = useState<Array<{symbol: string, pinned: boolean, timestamp: number}>>([]);
-  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades'>('watchlist');
+  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades' | 'indexes'>('watchlist');
   const [additionalCharts, setAdditionalCharts] = useState<Array<{symbol: string, interval: string}>>([]);
   
   const [drawingColor, setDrawingColor] = useState('#2962ff');
@@ -719,16 +719,16 @@ export function Dashboard() {
                     className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-[#1e222d] border border-[#2a2e39] hover:bg-[#2a2e39] text-[#2962ff] text-sm font-medium rounded transition-colors"
                  >
                     {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    <span>Auto Select Pair</span>
+                    <span className="hidden xl:inline">Auto Select Pair</span>
                  </button>
 
                  <button 
                     onClick={handleGenerate} 
                     disabled={generating || loadingConfig}
-                    className="hidden lg:flex items-center gap-1.5 px-4 py-1.5 bg-[#2962ff] hover:bg-[#1e53e5] text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
+                    className="hidden lg:flex items-center gap-1.5 px-3 lg:px-4 py-1.5 bg-[#2962ff] hover:bg-[#1e53e5] text-white text-sm font-medium rounded transition-colors disabled:opacity-50"
                  >
                     {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-                    <span>Auto Analyze</span>
+                    <span className="hidden xl:inline">Auto Analyze</span>
                  </button>
                </>
              )}
@@ -764,7 +764,7 @@ export function Dashboard() {
             <Settings className="w-5 h-5 md:w-4 md:h-4" />
           </button>
           <button onClick={() => setShowRightSidebar(!showRightSidebar)} className="hidden lg:flex p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Toggle Sidebar">
-            {showRightSidebar ? <X className="w-5 h-5 md:w-4 md:h-4" /> : <Menu className="w-5 h-5 md:w-4 md:h-4" />}
+            {showRightSidebar ? <PanelRightClose className="w-5 h-5 md:w-5 md:h-5 text-white" /> : <PanelRightOpen className="w-5 h-5 md:w-5 md:h-5" />}
           </button>
           <button onClick={logout} className="p-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39] rounded transition-colors" title="Log Out">
             <LogOut className="w-5 h-5 md:w-4 md:h-4" />
@@ -865,6 +865,8 @@ plot(close)"
                   </div>
                 </div>
                 <WaveChart 
+                   symbol={symbol}
+                   interval={interval}
                    data={chartData} 
                    liveCandle={liveCandle}
                    entryPoint={activeAnalysis?.entryPoint} 
@@ -994,6 +996,12 @@ plot(close)"
                    >
                      Trades
                    </button>
+                   <button 
+                     onClick={() => setRightSidebarTab('indexes')}
+                     className={`flex-1 py-3 text-[10px] sm:text-xs uppercase font-bold tracking-wider border-b-2 transition-colors ${rightSidebarTab === 'indexes' ? 'border-[#2962ff] text-white' : 'border-transparent text-[#787b86] hover:text-[#d1d4dc]'}`}
+                   >
+                     Indexes
+                   </button>
                 </div>
                 
                 <div className="p-4 flex flex-col flex-1 overflow-y-auto">
@@ -1089,6 +1097,39 @@ plot(close)"
                                ))}
                              </div>
                            )}
+                         </div>
+                      </div>
+                   ) : rightSidebarTab === 'indexes' ? (
+                      <div className="flex flex-col gap-4">
+                         <div>
+                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Fear & Greed Index</div>
+                            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-4 flex flex-col items-center">
+                               <div className="relative w-32 h-16 overflow-hidden rounded-t-full bg-[#131722] mb-4">
+                                  <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-[#2a2e39]" />
+                                  <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-t-transparent border-r-[transparent] border-l-[#f23645] border-b-[#089981] rotate-[-45deg]" />
+                                  <div className="absolute bottom-0 left-1/2 w-2 h-16 origin-bottom transform -translate-x-1/2 rotate-[15deg]">
+                                     <div className="w-1.5 h-10 bg-white rounded-t-full mx-auto shadow" />
+                                     <div className="w-3 h-3 bg-white rounded-full mx-auto -mt-1" />
+                                  </div>
+                               </div>
+                               <div className="text-2xl font-black text-white">68</div>
+                               <div className="text-sm font-bold text-[#089981]">GREED</div>
+                               <div className="text-[10px] text-[#787b86] mt-2 text-center">Indication of current market sentiment (Mock data for display)</div>
+                            </div>
+                         </div>
+                         <div>
+                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Altcoin Season Index</div>
+                            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-4 flex flex-col items-center">
+                               <div className="w-full flex justify-between text-xs text-[#787b86] mb-1 font-bold">
+                                  <span>Bitcoin Season</span>
+                                  <span>Altcoin Season</span>
+                               </div>
+                               <div className="w-full h-2 rounded bg-[#131722] overflow-hidden mb-2 border border-[#2a2e39]">
+                                  <div className="h-full bg-gradient-to-r from-[#f59e0b] to-[#2962ff] w-[42%]" />
+                               </div>
+                               <div className="text-xl font-black text-white">42</div>
+                               <div className="text-xs text-[#f59e0b]">Bitcoin Season</div>
+                            </div>
                          </div>
                       </div>
                    ) : null}

@@ -4,6 +4,8 @@
  */
 
 import { AuthProvider, useAuth } from './components/AuthProvider';
+import { Route, Switch } from 'wouter';
+import { ShareChart } from './components/ShareChart';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import axios from 'axios';
@@ -23,7 +25,12 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <Switch>
+        <Route path="/chart/:id" component={ShareChart} />
+        <Route path="/">
+           <AppContent />
+        </Route>
+      </Switch>
     </AuthProvider>
   );
 }
