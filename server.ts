@@ -285,7 +285,15 @@ async function startServer() {
       } catch (err) {
         // Fallback to Spot API if not found on Futures
         url = `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${interval}&limit=${limit}`;
-        response = await axios.get(url);
+        try {
+           response = await axios.get(url);
+        } catch(err2) {
+           // Fallback to MEXC if not found on Binance
+           let mexcInterval = interval;
+           if (interval === '1h') mexcInterval = '60m';
+           url = `https://api.mexc.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${mexcInterval}&limit=${limit}`;
+           response = await axios.get(url);
+        }
       }
       
       const data = response.data.map((d: any) => ({

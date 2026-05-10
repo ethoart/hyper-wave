@@ -245,7 +245,50 @@ export function Dashboard() {
     // Whoever replies wins!
     let wsFutures: WebSocket | null = null;
     let wsSpot: WebSocket | null = null;
+    let lastWsMessageTime = Date.now();
+    let isPolling = false;
     
+    // Polling fallback interval
+    const pollingFallback = setInterval(async () => {
+       if (Date.now() - lastWsMessageTime > 5000 && !isPolling) {
+           isPolling = true;
+           try {
+               const res = await axios.get(`/api/market/klines?symbol=${symbol}&interval=${safeInterval}&limit=1`);
+               if (res.data && res.data.length > 0) {
+                   const d = res.data[0];
+                   const liveCandle = {
+                     time: Math.floor(new Date(d.time).getTime() / 1000),
+                     open: parseFloat(d.open),
+                     high: parseFloat(d.high),
+                     low: parseFloat(d.low),
+                     close: parseFloat(d.close),
+                     volume: parseFloat(d.volume)
+                   };
+                   if (!window.initialTickDone) {
+                      console.log("Polling live candle:", liveCandle);
+                      window.initialTickDone = true;
+                   }
+                   setLiveCandle(liveCandle);
+                   setChartData((prev) => {
+                     const newData = [...prev];
+                     const lastIdx = newData.length - 1;
+                     if (lastIdx >= 0) {
+                        const existingTime = newData[lastIdx].time;
+                        let klineTime = d.time;
+                        if (existingTime === klineTime || (existingTime * 1000) === klineTime) {
+                           newData[lastIdx] = { ...liveCandle, time: existingTime }; 
+                        } else {
+                           newData.push({ ...liveCandle, time: existingTime });
+                        }
+                     }
+                     return newData;
+                   });
+               }
+           } catch(e) { }
+           isPolling = false;
+       }
+    }, 2000);
+
     const connectWs = () => {
       const futuresWsUrl = `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
       const spotWsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${safeInterval}`;
@@ -256,6 +299,7 @@ export function Dashboard() {
       const handleMessage = (event: MessageEvent) => {
         const message = JSON.parse(event.data);
         if (message.e === 'kline') {
+          lastWsMessageTime = Date.now();
           const kline = message.k;
           const liveCandle = {
             time: Math.floor(kline.t / 1000),
@@ -312,6 +356,7 @@ export function Dashboard() {
     connectWs();
 
     return () => {
+       clearInterval(pollingFallback);
        if (wsFutures) wsFutures.close();
        if (wsSpot) wsSpot.close();
     };
@@ -836,6 +881,13 @@ plot(close)"
           {chartData.length > 0 ? (
             <div className={`flex-1 w-full relative grid gap-1 p-1 bg-[#131722] ${additionalCharts.length > 0 ? (additionalCharts.length === 1 ? 'grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1' : additionalCharts.length === 2 ? 'grid-cols-1 grid-rows-3 md:grid-cols-2 md:grid-rows-2' : 'grid-cols-2 md:grid-cols-2') : 'grid-cols-1'}`}>
               <div className="relative border border-[#2a2e39] flex flex-col min-h-[400px]">
+                <div className="absolute top-2 left-2 z-10 flex gap-2 pointer-events-none">
+                  <div className="bg-[#1e222d]/80 backdrop-blur px-2 py-1 rounded text-xs font-bold text-white border border-[#2a2e39] flex items-center gap-2 pointer-events-auto shadow-md">
+                    <span className="text-[#2962ff]">{symbol}</span>
+                    <span className="text-[#787b86]">{interval}</span>
+                    {liveCandle && <span className="ml-2 font-mono text-[#d1d4dc]">{liveCandle.close}</span>}
+                  </div>
+                </div>
                 <WaveChart 
                    data={chartData} 
                    liveCandle={liveCandle}
@@ -857,7 +909,12 @@ plot(close)"
                      symbol={c.symbol} 
                      interval={c.interval} 
                      activeTool={activeTool} 
-                     onClose={() => setAdditionalCharts(additionalCharts.filter((_, idx) => idx !== i))} 
+                     onClose={() => setAdditionalCharts(additionalCharts.filter((_, idx) => idx !== i))}
+                     onChange={(newSym, newInt) => {
+                       const updated = [...additionalCharts];
+                       updated[i] = { symbol: newSym, interval: newInt };
+                       setAdditionalCharts(updated);
+                     }}
                   />
                 </div>
               ))}
