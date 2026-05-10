@@ -54,7 +54,7 @@ export function findPivots(data: Kline[], left: number = 3, right: number = 3): 
   return filtered;
 }
 
-export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
+export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlParams?: any) {
   // calculate RSI divergence over the last N candles
   let rsiDivergence = "";
   if (data.length > 30) {
@@ -104,6 +104,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
 
   let bestSetup: any = null;
   let highestScore = -999999;
+
+  // Find optimal parameters learned from ML, otherwise default
+  const idealRetrace2 = mlParams?.retrace2 || 0.618;
+  const idealExt3 = mlParams?.ext3 || 1.618;
+  const idealRetrace4 = mlParams?.retrace4 || 0.382;
 
   if (pivots.length < 5) {
     // Fallback if not enough pivots found
@@ -169,15 +174,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
 
       const retrace2 = (w1 - w2) / len1;
       if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 20;
-      if (Math.abs(retrace2 - 0.618) < 0.1) score += 30;
+      if (Math.abs(retrace2 - idealRetrace2) < 0.1) score += 30;
 
       const ext3 = len3 / len1;
       if (ext3 >= 1.0) score += 20;
-      if (Math.abs(ext3 - 1.618) < 0.2) score += 30;
+      if (Math.abs(ext3 - idealExt3) < 0.2) score += 30;
 
       const retrace4 = (w3 - w4) / len3;
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
-      if (Math.abs(retrace4 - 0.382) < 0.1) score += 30;
+      if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
       score += recencyBoost;
@@ -211,6 +216,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
             bestSetup = {
               score,
               trend: 'bullish',
+              params: { retrace2, ext3, retrace4 },
               waves: { 
                 start: { price: p0.price, time: p0.time, label: '0' }, 
                 w1: { price: p1.price, time: p1.time, label: '1' }, 
@@ -230,7 +236,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
               target: finalTarget,
               tradeStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] [BULL FLAG / ELLIOTT SPREAD] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Entry at ${suggestedEntry} (Wave 4 low was ${w4}). Stop Loss at Wave 1 peak (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`
             };
         }
       }
@@ -263,15 +269,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
 
       const retrace2 = (w2 - w1) / len1;
       if (retrace2 >= 0.382 && retrace2 <= 0.786) score += 20;
-      if (Math.abs(retrace2 - 0.618) < 0.1) score += 30;
+      if (Math.abs(retrace2 - idealRetrace2) < 0.1) score += 30;
 
       const ext3 = len3 / len1;
       if (ext3 >= 1.0) score += 20;
-      if (Math.abs(ext3 - 1.618) < 0.2) score += 30;
+      if (Math.abs(ext3 - idealExt3) < 0.2) score += 30;
 
       const retrace4 = (w4 - w3) / len3;
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
-      if (Math.abs(retrace4 - 0.382) < 0.1) score += 30;
+      if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
       score += recencyBoost;
@@ -305,6 +311,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
             bestSetup = {
               score,
               trend: 'bearish',
+              params: { retrace2, ext3, retrace4 },
               waves: { 
                 start: { price: p0.price, time: p0.time, label: '0' }, 
                 w1: { price: p1.price, time: p1.time, label: '1' }, 
@@ -324,7 +331,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d') {
               target: finalTarget,
               tradeStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] [BEAR FLAG / ELLIOTT SPREAD] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3. Mathematical Channels & Flags drawn. Recommended Short Entry at ${suggestedEntry} (Wave 4 high was ${w4}). Stop Loss at Wave 1 low (${w1}) as overlap invalidates the impulse. Target based on 100% of Wave 1 extension from Wave 4 and 61.8% of Wave 1-3 extension, averaging at ${finalTarget}.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`
             };
         }
       }

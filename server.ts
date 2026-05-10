@@ -54,6 +54,27 @@ const analysisSchema = new mongoose.Schema({
 });
 const Analysis = mongoose.models.Analysis || mongoose.model('Analysis', analysisSchema);
 
+const tradeSignalSchema = new mongoose.Schema({
+  symbol: String,
+  timestamp: { type: Date, default: Date.now },
+  trend: String,
+  entry: Number,
+  target: Number,
+  stopLoss: Number,
+  setupData: mongoose.Schema.Types.Mixed, // algorithmic context
+  status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated'], default: 'pending' },
+  pnlPercent: Number,
+  resolvedAt: Date
+});
+const TradeSignal = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
+
+const engineConfigSchema = new mongoose.Schema({
+  id: { type: String, default: 'global' },
+  params: mongoose.Schema.Types.Mixed,
+  updatedAt: { type: Date, default: Date.now }
+});
+const EngineConfig = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
+
 
 // -----------------------------------------------------
 // 2. Main Server Setup
@@ -380,8 +401,15 @@ async function startServer() {
     }
 
     try {
+      // Get dynamic parameters
+      let mlParams = null;
+      if (isDbConnected) {
+          const config = await EngineConfig.findOne({ id: 'global' });
+          if (config) mlParams = config.params;
+      }
+      
       // 1. Run Pure Math / Algorithmic Engine
-      const algoResult = analyzeElliottWaves(data);
+      const algoResult = analyzeElliottWaves(data, interval, mlParams);
       const mathOutputText = algoResult 
         ? `Algorithmic Math Engine found a ${algoResult.trend} Wave 4 setup. 
            Calculated Entry Point: ${algoResult.entry}, Target: ${algoResult.target}, Invalidation Stop Loss: ${algoResult.stopLoss}. 
@@ -557,6 +585,20 @@ async function startServer() {
   app.get('/api/alerts', (req, res) => {
     res.json(recentAlerts);
   });
+  
+  // ML History endpoint
+  app.get('/api/ml/history', async (req, res) => {
+    if (!isDbConnected) return res.json({ error: 'DB not connected' });
+    try {
+        const stats = await TradeSignal.aggregate([
+           { $group: { _id: "$status", count: { $sum: 1 }, avgPnl: { $avg: "$pnlPercent" } } }
+        ]);
+        const recent = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(10);
+        res.json({ stats, recent });
+    } catch(e) {
+        res.status(500).json({ error: 'Failed to fetch ML stats' });
+    }
+  });
 
   // Background Auto-Scanner that scans market top pairs periodically
   let isScanning = false;
@@ -586,7 +628,14 @@ async function startServer() {
              volume: parseFloat(d[5]),
            }));
            
-           const algoResult = analyzeElliottWaves(chartData);
+           // Get dynamic parameters
+           let mlParams = null;
+           if (isDbConnected) {
+               const config = await EngineConfig.findOne({ id: 'global' });
+               if (config) mlParams = config.params;
+           }
+           
+           const algoResult = analyzeElliottWaves(chartData, '1h', mlParams);
            if (algoResult && algoResult.trend !== 'neutral') {
               const currentPrice = chartData[chartData.length - 1].close;
               // Check if it's decently actionable (entry within 2% of current price)
@@ -617,6 +666,27 @@ async function startServer() {
          const newAlertIds = new Set(foundAlerts.map(a => a.id));
          const filteredOld = recentAlerts.filter(a => !newAlertIds.has(a.id));
          recentAlerts = [...foundAlerts, ...filteredOld].slice(0, 20); // keep last 20
+         
+         // Machine Learning Dataset Collection:
+         // Store valid setups in DB to track outcome (win/loss) over time
+         if (isDbConnected) {
+            for (const alert of foundAlerts) {
+               try {
+                   // Check if we already logged this exact setup recently
+                   const existing = await TradeSignal.findOne({ symbol: alert.symbol, status: 'pending', trend: alert.trend });
+                   if (!existing) {
+                       await TradeSignal.create({
+                           symbol: alert.symbol,
+                           trend: alert.trend,
+                           entry: alert.entry,
+                           target: alert.target,
+                           stopLoss: alert.stopLoss,
+                           setupData: { reasoning: alert.reasoning, params: alert }
+                       });
+                   }
+               } catch(e) { /* ignore */ }
+            }
+         }
       }
       
     } catch(err) {
@@ -626,9 +696,96 @@ async function startServer() {
     }
   };
   
+  // Model outcome evaluator (Self-Correction/Learning mechanism)
+  // This loop goes back and checks past mathematical prediction signals and grades them
+  let isEvaluating = false;
+  const runOutcomeEvaluator = async () => {
+     if (!isDbConnected || isEvaluating) return;
+     isEvaluating = true;
+     try {
+         const pendingSignals = await TradeSignal.find({ status: 'pending' }).limit(50);
+         for (const signal of pendingSignals) {
+             try {
+                // Fetch recent price
+                const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${signal.symbol}`);
+                const price = parseFloat(response.data.price);
+                
+                let outcome = 'pending';
+                let pnl = 0;
+                
+                if (signal.trend === 'bullish') {
+                    if (price >= signal.target) {
+                        outcome = 'win';
+                        pnl = (signal.target - signal.entry) / signal.entry * 100;
+                    } else if (price <= signal.stopLoss) {
+                        outcome = 'loss';
+                        pnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
+                    }
+                } else if (signal.trend === 'bearish') {
+                    if (price <= signal.target) {
+                        outcome = 'win';
+                        pnl = (signal.entry - signal.target) / signal.entry * 100;
+                    } else if (price >= signal.stopLoss) {
+                        outcome = 'loss';
+                        pnl = (signal.entry - signal.stopLoss) / signal.entry * 100;
+                    }
+                }
+                
+                if (outcome !== 'pending') {
+                    signal.status = outcome;
+                    signal.pnlPercent = pnl;
+                    signal.resolvedAt = new Date();
+                    await signal.save();
+                    console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${pnl.toFixed(2)}%)`);
+                }
+             } catch(e) { }
+         }
+         
+         // ML Recalibration: Re-average winning params
+         try {
+             const winningSignals = await TradeSignal.find({ status: 'win' }).sort({ resolvedAt: -1 }).limit(100);
+             if (winningSignals.length > 5) { // Minimum 5 wins to start leaning
+                let sumR2 = 0, sumE3 = 0, sumR4 = 0;
+                let count = 0;
+                for (const win of winningSignals) {
+                    if (win.setupData?.params?.params) {
+                        sumR2 += win.setupData.params.params.retrace2;
+                        sumE3 += win.setupData.params.params.ext3;
+                        sumR4 += win.setupData.params.params.retrace4;
+                        count++;
+                    }
+                }
+                
+                if (count > 0) {
+                    let newParams = {
+                        retrace2: sumR2 / count,
+                        ext3: sumE3 / count,
+                        retrace4: sumR4 / count
+                    };
+                    
+                    await EngineConfig.findOneAndUpdate(
+                        { id: 'global' }, 
+                        { params: newParams, updatedAt: new Date() }, 
+                        { upsert: true }
+                    );
+                    console.log(`[ML-Evaluator] Updated global AI parameters from past ${count} winning trades.`);
+                }
+             }
+         } catch (e) {
+             console.error("[ML-Evaluator] Failed to recalibrate params:", e);
+         }
+     } catch(err) {
+     } finally {
+         isEvaluating = false;
+     }
+  };
+
   // Run every 2 minutes
   setInterval(runAutoScanner, 2 * 60 * 1000);
   setTimeout(runAutoScanner, 10000); // Initial run after 10s
+  
+  // Run outcome evaluator every 5 minutes
+  setInterval(runOutcomeEvaluator, 5 * 60 * 1000);
 
   // -----------------------------------------------------
   // Vite Middleware for Frontend Serving
