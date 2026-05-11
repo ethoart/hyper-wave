@@ -100,6 +100,7 @@ export function Dashboard() {
   const [placingTrade, setPlacingTrade] = useState(false);
   const [openTrades, setOpenTrades] = useState<any[]>([]);
   const [closedTrades, setClosedTrades] = useState<any[]>([]);
+  const [livePositions, setLivePositions] = useState<any[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -546,6 +547,7 @@ export function Dashboard() {
       const res = await axios.get('/api/trades');
       setOpenTrades(res.data.pending);
       setClosedTrades(res.data.closed);
+      if (res.data.livePositions) setLivePositions(res.data.livePositions);
       if (res.data.balance !== undefined) setBinanceBalance(res.data.balance);
     } catch(err) {
       // Failed to load
@@ -1092,6 +1094,32 @@ plot(close)"
                             </div>
                          )}
                          <div>
+                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Live Binance Positions</div>
+                           {livePositions.length === 0 ? (
+                             <div className="text-sm text-[#787b86] italic py-2">No active positions on Binance.</div>
+                           ) : (
+                             <div className="flex flex-col gap-2">
+                               {livePositions.map((pos: any, idx) => (
+                                  <div key={idx} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="font-bold text-white text-sm">
+                                            <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
+                                        </span>
+                                        <span className={`text-xs font-bold ${pos.unRealizedProfit > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                                          ${pos.unRealizedProfit.toFixed(2)}
+                                        </span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="text-xs text-[#787b86]">Entry: {pos.entryPrice.toFixed(4)}</span>
+                                        <span className="text-xs text-[#787b86]">Size: {pos.amount} ({pos.leverage}x)</span>
+                                     </div>
+                                  </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
+
+                         <div className="mt-4">
                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
                            {openTrades.length === 0 ? (
                              <div className="text-sm text-[#787b86] italic py-2">No pending trades.</div>

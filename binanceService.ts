@@ -152,6 +152,44 @@ export async function getBinanceBalance() {
   }
 }
 
+export async function getBinancePositions() {
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+  
+  if (!apiKey || !secretKey) {
+    return [];
+  }
+
+  const timestamp = Date.now();
+  let queryString = `timestamp=${timestamp}`;
+  const signature = createSignature(queryString, secretKey);
+  queryString += `&signature=${signature}`;
+
+  try {
+    const baseUrl = getBaseUrl();
+    const positionUrl = `${baseUrl}/fapi/v2/positionRisk?${queryString}`;
+    const positionRes = await axios.get(positionUrl, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+    
+    if (positionRes.data && positionRes.data.length > 0) {
+       return positionRes.data.filter((pos: any) => parseFloat(pos.positionAmt) !== 0).map((pos: any) => ({
+           symbol: pos.symbol,
+           amount: Math.abs(parseFloat(pos.positionAmt)),
+           side: parseFloat(pos.positionAmt) > 0 ? 'BUY' : 'SELL',
+           entryPrice: parseFloat(pos.entryPrice),
+           unRealizedProfit: parseFloat(pos.unRealizedProfit),
+           leverage: pos.leverage,
+           markPrice: parseFloat(pos.markPrice)
+       }));
+    }
+    return [];
+  } catch(error: any) {
+    console.error("Binance Position Error:", error.response?.data || error.message);
+    return [];
+  }
+}
+
 export async function closeBinancePosition(symbol: string) {
   const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
   const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;

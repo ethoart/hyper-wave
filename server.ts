@@ -10,7 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import crypto from 'crypto';
 import { analyzeElliottWaves } from './ewEngine.js';
-import { placeBinanceTrade, closeBinancePosition, getBinanceBalance } from './binanceService.js';
+import { placeBinanceTrade, closeBinancePosition, getBinanceBalance, getBinancePositions } from './binanceService.js';
 
 dotenv.config();
 
@@ -501,17 +501,19 @@ async function startServer() {
   app.get('/api/trades', async (req: any, res) => {
     try {
       if (!isDbConnected) {
-         return res.json({ pending: [], closed: [] });
+         return res.json({ pending: [], closed: [], livePositions: [] });
       }
       const pending = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
       const closed = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
       
       let balance = 0;
+      let livePositions: any[] = [];
       try {
          balance = await getBinanceBalance() || 0;
+         livePositions = await getBinancePositions() || [];
       } catch(e) { }
 
-      res.json({ pending, closed, balance });
+      res.json({ pending, closed, balance, livePositions });
     } catch(err) {
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
