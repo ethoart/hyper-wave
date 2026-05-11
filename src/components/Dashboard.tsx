@@ -1091,7 +1091,7 @@ plot(close)"
                       <div className="flex flex-col gap-4">
                          {binanceBalance !== null && (
                             <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center">
-                               <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Testnet</span>
+                               <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Wallet</span>
                                <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
                             </div>
                          )}
@@ -1444,17 +1444,17 @@ plot(close)"
                          <h3 className="text-white font-bold mb-4">API Connections</h3>
                          <div className="bg-[#131722] border border-[#2a2e39] p-4 rounded text-[#d1d4dc] text-sm">
                            <div className="flex justify-between items-center mb-1">
-                              <span className="font-bold text-white">Binance Testnet</span>
+                              <span className="font-bold text-white">Binance Wallet</span>
                               {binanceBalance !== null ? (
                                 <span className="text-[#089981] font-bold">Connected</span>
                               ) : (
                                 <span className="text-[#787b86]">Not Configured</span>
                               )}
                            </div>
-                           <div className="text-[#787b86] text-xs mb-3">Uses Demo Account for auto execution</div>
+                           <div className="text-[#787b86] text-xs mb-3">Uses account for auto execution</div>
                            {binanceBalance !== null && (
                               <div className="flex justify-between items-center bg-[#1e222d] p-3 rounded border border-[#2a2e39]">
-                                 <span className="text-xs text-[#787b86]">Current Testnet Balance</span>
+                                 <span className="text-xs text-[#787b86]">Current Wallet Balance</span>
                                  <span className="font-bold text-white text-lg">${binanceBalance.toFixed(2)} USDT</span>
                               </div>
                            )}
