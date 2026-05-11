@@ -105,6 +105,7 @@ export function Dashboard() {
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
   const [binanceBalance, setBinanceBalance] = useState<number | null>(null);
+  const [autoBotBalance, setAutoBotBalance] = useState<number | null>(null);
 
   // Mobile responsive state
   const [showRightSidebar, setShowRightSidebar] = useState(window.innerWidth >= 1024);
@@ -549,6 +550,7 @@ export function Dashboard() {
       setClosedTrades(res.data.closed);
       if (res.data.livePositions) setLivePositions(res.data.livePositions);
       if (res.data.balance !== undefined) setBinanceBalance(res.data.balance);
+      if (res.data.autoBotBalance !== undefined) setAutoBotBalance(res.data.autoBotBalance);
     } catch(err) {
       // Failed to load
     }
@@ -1100,7 +1102,11 @@ plot(close)"
                            ) : (
                              <div className="flex flex-col gap-2">
                                {livePositions.map((pos: any, idx) => (
-                                  <div key={idx} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                  <div 
+                                     key={idx} 
+                                     onClick={() => setSymbol(pos.symbol)}
+                                     className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors"
+                                  >
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm">
                                             <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
@@ -1115,7 +1121,8 @@ plot(close)"
                                      </div>
                                      <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
                                        <button 
-                                         onClick={async () => {
+                                         onClick={async (e) => {
+                                            e.stopPropagation();
                                             const setTp = prompt(`Set Take Profit for ${pos.symbol} (${pos.side}):`);
                                             const setSl = prompt(`Set Stop Loss for ${pos.symbol} (${pos.side}):`);
                                             if (!setTp && !setSl) return;
@@ -1130,7 +1137,8 @@ plot(close)"
                                          Set TP/SL
                                        </button>
                                        <button 
-                                         onClick={async () => {
+                                         onClick={async (e) => {
+                                           e.stopPropagation();
                                            if(window.confirm(`Close position for ${pos.symbol}?`)) {
                                              try {
                                                 await axios.post('/api/trade/close', { symbol: pos.symbol });
@@ -1151,13 +1159,20 @@ plot(close)"
                          </div>
 
                          <div className="mt-4">
-                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
+                           <div className="flex justify-between items-end mb-2">
+                              <div className="text-xs text-[#2962ff] font-bold uppercase">Pending Auto-Trades</div>
+                              {autoBotBalance !== null && (
+                                <div className="text-[10px] text-[#089981] font-bold bg-[#089981]/10 px-2 py-0.5 rounded">
+                                  Bot Budget: ${autoBotBalance.toFixed(2)}
+                                </div>
+                              )}
+                           </div>
                            {openTrades.length === 0 ? (
                              <div className="text-sm text-[#787b86] italic py-2">No pending trades.</div>
                            ) : (
                              <div className="flex flex-col gap-2">
                                {openTrades.map((trade: any) => (
-                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                  <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors">
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
                                         <span className="text-xs text-[#787b86]">
@@ -1182,7 +1197,7 @@ plot(close)"
                            ) : (
                              <div className="flex flex-col gap-2">
                                {closedTrades.map((trade: any) => (
-                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                  <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors">
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
                                         <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>

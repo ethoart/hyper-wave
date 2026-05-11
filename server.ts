@@ -78,6 +78,7 @@ const engineConfigSchema = new mongoose.Schema({
   id: { type: String, default: 'global' },
   params: mongoose.Schema.Types.Mixed,
   insights: String,
+  autoBotBalance: { type: Number, default: 100 },
   updatedAt: { type: Date, default: Date.now }
 });
 const EngineConfig = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
@@ -513,7 +514,10 @@ async function startServer() {
          livePositions = await getBinancePositions() || [];
       } catch(e) { }
 
-      res.json({ pending, closed, balance, livePositions });
+      let engineCfg = await EngineConfig.findOne({ id: 'global' });
+      let autoBotBalance = engineCfg?.autoBotBalance || 100;
+
+      res.json({ pending, closed, balance, livePositions, autoBotBalance });
     } catch(err) {
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
@@ -951,19 +955,28 @@ async function startServer() {
          // Machine Learning Dataset Collection:
          // Store valid setups in DB to track outcome (win/loss) over time
          if (isDbConnected) {
+            let engineCfg = await EngineConfig.findOne({ id: 'global' });
+            if (!engineCfg) { engineCfg = await EngineConfig.create({ id: 'global', autoBotBalance: 100 }); }
+            
+            // Check current active trades to avoid over-trading the same budget 
+            const activeCount = await TradeSignal.countDocuments({ status: { $in: ['pending', 'live'] } });
+            
             for (const alert of foundAlerts) {
                try {
-                   // Check if we already logged this exact setup recently
-                   const existing = await TradeSignal.findOne({ symbol: alert.symbol, status: 'pending', trend: alert.trend });
-                   if (!existing) {
-                       const tradeAmountDollars = 10;
+                   const existing = await TradeSignal.findOne({ symbol: alert.symbol, status: { $in: ['pending', 'live'] }, trend: alert.trend });
+                   if (!existing && activeCount < 3) {
+                       let currentBudget = engineCfg.autoBotBalance || 100;
+                       if (currentBudget <= 5) {
+                           currentBudget = 100; // Reset budget
+                           engineCfg.autoBotBalance = 100;
+                           await engineCfg.save();
+                       }
+                       
+                       // Full budget allocation per trade, but we divide by 3 to allow max 3 concurrent trades
+                       const tradeAmountDollars = +(currentBudget / 3).toFixed(2);
                        const leverage = 10;
-                       const positionSizeUsdt = tradeAmountDollars * leverage;
                        
-                       // Calculate expiration based on 5 periods of 15m (just a default since scan uses 15m or 1h)
-                       // If we don't have the explicit interval from alert, assume 1h.
-                       const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000); // default 5 hours
-                       
+                       const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
                        await TradeSignal.create({
                            symbol: alert.symbol,
                            trend: alert.trend,
@@ -1081,10 +1094,19 @@ async function startServer() {
                     }
                     signal.status = outcome;
                     signal.pnlPercent = pnl;
-                    signal.realizedPnl = (signal.amount || 10) * (pnl / 100);
+                    const leverage = 10;
+                    signal.realizedPnl = (signal.amount || 10) * leverage * (pnl / 100);
+                    // Handle compounding
+                    let engineCfg = await EngineConfig.findOne({ id: 'global' });
+                    if (engineCfg) {
+                        engineCfg.autoBotBalance = (engineCfg.autoBotBalance || 100) + signal.realizedPnl;
+                        if (engineCfg.autoBotBalance <= 5) engineCfg.autoBotBalance = 100; // Reset
+                        await engineCfg.save();
+                    }
+
                     signal.resolvedAt = new Date();
                     await signal.save();
-                    console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${pnl.toFixed(2)}% | $${(signal.realizedPnl || 0).toFixed(2)})`);
+                    console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${(pnl * leverage).toFixed(2)}% | $${(signal.realizedPnl || 0).toFixed(2)}) | New Budget: $${engineCfg?.autoBotBalance?.toFixed(2)}`);
                 }
              } catch(e) { }
          }
