@@ -103,7 +103,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
       const slTimestamp = Date.now();
       let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${slTimestamp}`;
       const slSig = createSignature(slQuery, secretKey);
-      await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('SL failed', e.response?.data?.msg));
+      await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.error('SL failed', e.response?.data));
     }
 
     // Place Take Profit order if provided
@@ -112,7 +112,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
       const tpTimestamp = Date.now();
       let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${tpTimestamp}`;
       const tpSig = createSignature(tpQuery, secretKey);
-      await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('TP failed', e.response?.data?.msg));
+      await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.error('TP failed', e.response?.data));
     }
 
     return response.data;

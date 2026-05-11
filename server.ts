@@ -399,7 +399,7 @@ async function startServer() {
         const response = await axios.get(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol.toUpperCase()}&limit=${limit}`);
         res.json(response.data);
     } catch(err: any) {
-        res.status(500).json({ error: 'Failed to fetch depth' });
+        res.json({ bids: [], asks: [] });
     }
   });
 
