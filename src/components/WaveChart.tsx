@@ -601,34 +601,40 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
 
   useEffect(() => {
     if (clearDrawings > 0) {
-       userDrawings.current = [];
-       if (userSeriesRef.current) {
-          userSeriesRef.current.setData([]);
-          userSeriesRef.current.setMarkers([]);
-       }
-       if (candlestickSeriesRef.current) {
-         targetPriceLinesRef.current.forEach(line => {
-             try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
-         });
-       }
-       targetPriceLinesRef.current = [];
-
-       auxiliarySeriesRef.current.forEach(s => {
-           try { chartRef.current?.removeSeries(s); } catch (e) {}
-       });
-       auxiliarySeriesRef.current = [];
-       
-       completedShapesRef.current.forEach(shape => {
-           shape.series.forEach(s => {
-               try { chartRef.current?.removeSeries(s); } catch(e) {}
-           });
-           if (candlestickSeriesRef.current) {
-               shape.priceLines.forEach(line => {
-                   try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
-               });
+       try {
+           userDrawings.current = [];
+           if (userSeriesRef.current) {
+              userSeriesRef.current.setData([]);
+              userSeriesRef.current.setMarkers([]);
            }
-       });
-       completedShapesRef.current = [];
+           if (candlestickSeriesRef.current) {
+             targetPriceLinesRef.current.forEach(line => {
+                 try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
+             });
+           }
+           targetPriceLinesRef.current = [];
+
+           auxiliarySeriesRef.current.forEach(s => {
+               try { chartRef.current?.removeSeries(s); } catch (e) {}
+           });
+           auxiliarySeriesRef.current = [];
+           
+           completedShapesRef.current.forEach(shape => {
+               shape.series.forEach(s => {
+                   try { chartRef.current?.removeSeries(s); } catch(e) {}
+               });
+               if (candlestickSeriesRef.current) {
+                   shape.priceLines.forEach(line => {
+                       try { candlestickSeriesRef.current?.removePriceLine(line); } catch(e) {}
+                   });
+               }
+           });
+           completedShapesRef.current = [];
+           
+           serializedDrawingsRef.current = [];
+       } catch (err: any) {
+           console.error("Error clearing drawings:", err.message);
+       }
     }
   }, [clearDrawings]);
 

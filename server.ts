@@ -479,6 +479,15 @@ async function startServer() {
     }
   });
 
+  app.get('/api/fng', async (req, res) => {
+    try {
+        const response = await axios.get('https://api.alternative.me/fng/?limit=1');
+        res.json(response.data);
+    } catch(err: any) {
+        res.status(500).json({ error: 'Failed to fetch FNG' });
+    }
+  });
+
   app.get('/api/trades', async (req: any, res) => {
     try {
       if (!isDbConnected) {
@@ -954,7 +963,10 @@ async function startServer() {
                                  
                                  let orderId = '';
                                  try {
-                                     const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET');
+                                     const { setBinanceLeverage } = await import('./binanceService.js');
+                                     await setBinanceLeverage(signal.symbol, leverage);
+                                     
+                                     const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET', signal.stopLoss, signal.target);
                                      orderId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
                                      console.log(`[Binance] Executed Pending Entry: ${side} ${quantity} ${signal.symbol}`);
                                  } catch(e: any) {

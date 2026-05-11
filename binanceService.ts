@@ -7,16 +7,79 @@ function createSignature(queryString: string, secret: string) {
   return crypto.createHmac('sha256', secret).update(queryString).digest('hex');
 }
 
-export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', quantity: number, type: string = 'MARKET') {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY;
+let exchangeInfoCache: any = null;
+
+async function getExchangeInfo() {
+  if (exchangeInfoCache) return exchangeInfoCache;
+  try {
+    const res = await axios.get(`${TESTNET_URL}/fapi/v1/exchangeInfo`);
+    exchangeInfoCache = res.data;
+    return exchangeInfoCache;
+  } catch (err) {
+    console.warn("Failed to fetch exchange info");
+    return null;
+  }
+}
+
+function adjustPrecision(value: number, stepSize: string) {
+  const step = parseFloat(stepSize);
+  const precisionStr = stepSize.indexOf('.') >= 0 ? stepSize.split('.')[1].replace(/0+$/, '') : '';
+  const precision = precisionStr.length;
+  // Use floor/round to step to ensure perfectly aligned quantities
+  const rounded = Math.round(value / step) * step;
+  return parseFloat(rounded.toFixed(precision));
+}
+
+export async function setBinanceLeverage(symbol: string, leverage: number) {
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+  
+  if (!apiKey || !secretKey) return;
+
+  const timestamp = Date.now();
+  let queryString = `symbol=${symbol}&leverage=${leverage}&timestamp=${timestamp}`;
+  const signature = createSignature(queryString, secretKey);
+  queryString += `&signature=${signature}`;
+
+  try {
+    const url = `${TESTNET_URL}/fapi/v1/leverage?${queryString}`;
+    await axios.post(url, null, {
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+  } catch (error: any) {
+    console.warn("Failed to set leverage:", error.response?.data?.msg || error.message);
+  }
+}
+
+export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', quantity: number, type: string = 'MARKET', stopLoss?: number, takeProfit?: number) {
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     throw new Error("Binance Testnet API keys are not configured in .env");
   }
 
+  const exchangeInfo = await getExchangeInfo();
+  let finalQty = quantity;
+  let finalSL = stopLoss;
+  let finalTP = takeProfit;
+
+  if (exchangeInfo) {
+    const symbolInfo = exchangeInfo.symbols.find((s: any) => s.symbol === symbol);
+    if (symbolInfo) {
+      const lotSizeFilter = symbolInfo.filters.find((f: any) => f.filterType === 'LOT_SIZE');
+      if (lotSizeFilter) finalQty = adjustPrecision(quantity, lotSizeFilter.stepSize);
+
+      const priceFilter = symbolInfo.filters.find((f: any) => f.filterType === 'PRICE_FILTER');
+      if (priceFilter) {
+        if (stopLoss) finalSL = adjustPrecision(stopLoss, priceFilter.tickSize);
+        if (takeProfit) finalTP = adjustPrecision(takeProfit, priceFilter.tickSize);
+      }
+    }
+  }
+
   const timestamp = Date.now();
-  let queryString = `symbol=${symbol}&side=${side}&type=${type}&quantity=${quantity}&timestamp=${timestamp}`;
+  let queryString = `symbol=${symbol}&side=${side}&type=${type}&quantity=${finalQty}&timestamp=${timestamp}`;
   const signature = createSignature(queryString, secretKey);
   queryString += `&signature=${signature}`;
 
@@ -27,6 +90,25 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
         'X-MBX-APIKEY': apiKey,
       },
     });
+
+    // Place Stop Loss order if provided
+    if (finalSL) {
+      const slSide = side === 'BUY' ? 'SELL' : 'BUY';
+      const slTimestamp = Date.now();
+      let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${slTimestamp}`;
+      const slSig = createSignature(slQuery, secretKey);
+      await axios.post(`${TESTNET_URL}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('SL failed', e.response?.data?.msg));
+    }
+
+    // Place Take Profit order if provided
+    if (finalTP) {
+      const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
+      const tpTimestamp = Date.now();
+      let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${tpTimestamp}`;
+      const tpSig = createSignature(tpQuery, secretKey);
+      await axios.post(`${TESTNET_URL}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('TP failed', e.response?.data?.msg));
+    }
+
     return response.data;
   } catch (error: any) {
     console.error("Binance Trade Error:", error.response?.data || error.message);
@@ -35,8 +117,8 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
 }
 
 export async function getBinanceBalance() {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY;
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     return null;
@@ -64,8 +146,8 @@ export async function getBinanceBalance() {
 }
 
 export async function closeBinancePosition(symbol: string) {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY;
+  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     throw new Error("Binance Testnet API keys are not configured in .env");
