@@ -1093,7 +1093,7 @@ plot(close)"
                                <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
                             </div>
                          )}
-                         <div>
+                         <div className="flex-1">
                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Live Binance Positions</div>
                            {livePositions.length === 0 ? (
                              <div className="text-sm text-[#787b86] italic py-2">No active positions on Binance.</div>
@@ -1113,52 +1113,36 @@ plot(close)"
                                         <span className="text-xs text-[#787b86]">Entry: {pos.entryPrice.toFixed(4)}</span>
                                         <span className="text-xs text-[#787b86]">Size: {pos.amount} ({pos.leverage}x)</span>
                                      </div>
-                                  </div>
-                               ))}
-                             </div>
-                           )}
-                         </div>
-
-                         <div className="mt-4">
-                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
-                           {openTrades.length === 0 ? (
-                             <div className="text-sm text-[#787b86] italic py-2">No pending trades.</div>
-                           ) : (
-                             <div className="flex flex-col gap-2">
-                               {openTrades.map((trade: any) => (
-                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
-                                     <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
-                                        <span className="text-xs text-[#787b86]">
-                                          {trade.binanceOrderId ? <span className="text-[#2962ff] font-bold">LIVE</span> : 'Waiting Entry'}
-                                        </span>
-                                     </div>
-                                     <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>
-                                        <span className="text-xs text-[#089981]">Target: {trade.target}</span>
-                                     </div>
-                                     <div className="text-[10px] text-[#787b86]">Auto Amount: ${trade.amount}</div>
-                                  </div>
-                               ))}
-                             </div>
-                           )}
-                         </div>
-
-                         <div>
-                           <div className="text-xs text-[#787b86] font-bold mb-2 uppercase">Recent Outcomes</div>
-                           {closedTrades.length === 0 ? (
-                             <div className="text-sm text-[#787b86] italic py-2">No completed trades yet.</div>
-                           ) : (
-                             <div className="flex flex-col gap-2">
-                               {closedTrades.map((trade: any) => (
-                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
-                                     <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
-                                        <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>
-                                     </div>
-                                     <div className="flex justify-between items-center w-full">
-                                        <span className="text-xs text-[#787b86]">Realized:</span>
-                                        <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
+                                     <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
+                                       <button 
+                                         onClick={async () => {
+                                            const setTp = prompt(`Set Take Profit for ${pos.symbol} (${pos.side}):`);
+                                            const setSl = prompt(`Set Stop Loss for ${pos.symbol} (${pos.side}):`);
+                                            if (!setTp && !setSl) return;
+                                            try {
+                                              await axios.post('/api/trade/tpsl', { symbol: pos.symbol, positionSide: pos.side, tp: setTp, sl: setSl });
+                                              alert("TP/SL updated! ✅");
+                                              fetchTrades();
+                                            } catch (err: any) { alert("Error: " + (err.response?.data?.error || err.message)); }
+                                         }}
+                                         className="flex-1 bg-[#2a2e39] hover:bg-[#363a45] text-[#d1d4dc] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
+                                       >
+                                         Set TP/SL
+                                       </button>
+                                       <button 
+                                         onClick={async () => {
+                                           if(window.confirm(`Close position for ${pos.symbol}?`)) {
+                                             try {
+                                                await axios.post('/api/trade/close', { symbol: pos.symbol });
+                                                alert("Closed!");
+                                                fetchTrades();
+                                             } catch(err:any) { alert(err.response?.data?.error || err.message); }
+                                           }
+                                         }}
+                                         className="flex-1 bg-[#f23645]/10 hover:bg-[#f23645]/20 text-[#f23645] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
+                                       >
+                                         Close Pos
+                                       </button>
                                      </div>
                                   </div>
                                ))}

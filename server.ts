@@ -580,12 +580,12 @@ async function startServer() {
       if (takeProfit) {
         const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
         const tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${takeProfit}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-        await axios.post(`${baseEndpoint}/fapi/v1/order?${tpQuery}&signature=${getSignature(tpQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }});
+        await axios.post(`${baseEndpoint}/fapi/v1/order?${tpQuery}&signature=${getSignature(tpQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }}).catch(e => console.error('Manual TP Failed:', e.response?.data?.msg));
       }
       if (stopLoss) {
         const slSide = side === 'BUY' ? 'SELL' : 'BUY';
         const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${stopLoss}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-        await axios.post(`${baseEndpoint}/fapi/v1/order?${slQuery}&signature=${getSignature(slQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }});
+        await axios.post(`${baseEndpoint}/fapi/v1/order?${slQuery}&signature=${getSignature(slQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }}).catch(e => console.error('Manual SL Failed:', e.response?.data?.msg));
       }
       
       res.json({ success: true, message: 'Trade executed successfully on Binance via API', data: orderRes.data });
@@ -593,6 +593,55 @@ async function startServer() {
       console.error('Binance API Error:', err.response?.data || err.message);
       res.status(500).json({ error: err.response?.data?.msg || err.message });
     }
+  });
+
+  app.post('/api/trade/tpsl', authMiddleware, async (req: any, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admin can manage TP/SL' });
+    }
+    const { symbol, tp, sl, positionSide } = req.body;
+    try {
+       const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+       const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+       if (!apiKey || !secretKey) return res.status(500).json({ error: 'Configure Binance API' });
+       
+       const isTestnet = process.env.BINANCE_TESTNET !== 'false';
+       const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
+       const getSig = (qs: string) => crypto.createHmac('sha256', secretKey).update(qs).digest('hex');
+
+       // Cancel previous TP/SL
+       const cancelQs = `symbol=${symbol}&timestamp=${Date.now()}`;
+       await axios.delete(`${baseEndpoint}/fapi/v1/allOpenOrders?${cancelQs}&signature=${getSig(cancelQs)}`, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(()=>null);
+
+       const triggerSide = positionSide === 'BUY' ? 'SELL' : 'BUY';
+       const recvWindow = 5000;
+
+       if (sl) {
+         const qs = `symbol=${symbol}&side=${triggerSide}&type=STOP_MARKET&stopPrice=${sl}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
+         await axios.post(`${baseEndpoint}/fapi/v1/order?${qs}&signature=${getSig(qs)}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+       }
+       if (tp) {
+         const qs = `symbol=${symbol}&side=${triggerSide}&type=TAKE_PROFIT_MARKET&stopPrice=${tp}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
+         await axios.post(`${baseEndpoint}/fapi/v1/order?${qs}&signature=${getSig(qs)}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+       }
+       res.json({ success: true, message: 'TP / SL updated on Binance' });
+    } catch(err: any) {
+       console.error('TPSL Update Error', err.response?.data || err.message);
+       res.status(500).json({ error: err.response?.data?.msg || err.message });
+    }
+  });
+
+  app.post('/api/trade/close', authMiddleware, async (req: any, res) => {
+     if (req.user.role !== 'admin') {
+       return res.status(403).json({ error: 'Only admin can manage trades' });
+     }
+     const { symbol } = req.body;
+     try {
+       const result = await closeBinancePosition(symbol);
+       res.json(result);
+     } catch(e: any) {
+       res.status(500).json({ error: e.message });
+     }
   });
 
   app.post('/api/users/upgrade-pro', authMiddleware, async (req: any, res) => {
