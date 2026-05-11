@@ -1,7 +1,10 @@
 import crypto from 'crypto';
 import axios from 'axios';
 
-const TESTNET_URL = 'https://testnet.binancefuture.com';
+function getBaseUrl() {
+  const isTestnet = process.env.BINANCE_TESTNET !== 'false';
+  return isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
+}
 
 function createSignature(queryString: string, secret: string) {
   return crypto.createHmac('sha256', secret).update(queryString).digest('hex');
@@ -12,7 +15,8 @@ let exchangeInfoCache: any = null;
 async function getExchangeInfo() {
   if (exchangeInfoCache) return exchangeInfoCache;
   try {
-    const res = await axios.get(`${TESTNET_URL}/fapi/v1/exchangeInfo`);
+    const baseUrl = getBaseUrl();
+    const res = await axios.get(`${baseUrl}/fapi/v1/exchangeInfo`);
     exchangeInfoCache = res.data;
     return exchangeInfoCache;
   } catch (err) {
@@ -42,7 +46,8 @@ export async function setBinanceLeverage(symbol: string, leverage: number) {
   queryString += `&signature=${signature}`;
 
   try {
-    const url = `${TESTNET_URL}/fapi/v1/leverage?${queryString}`;
+    const baseUrl = getBaseUrl();
+    const url = `${baseUrl}/fapi/v1/leverage?${queryString}`;
     await axios.post(url, null, {
       headers: { 'X-MBX-APIKEY': apiKey },
     });
@@ -84,7 +89,8 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
   queryString += `&signature=${signature}`;
 
   try {
-    const url = `${TESTNET_URL}/fapi/v1/order?${queryString}`;
+    const baseUrl = getBaseUrl();
+    const url = `${baseUrl}/fapi/v1/order?${queryString}`;
     const response = await axios.post(url, null, {
       headers: {
         'X-MBX-APIKEY': apiKey,
@@ -97,7 +103,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
       const slTimestamp = Date.now();
       let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${slTimestamp}`;
       const slSig = createSignature(slQuery, secretKey);
-      await axios.post(`${TESTNET_URL}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('SL failed', e.response?.data?.msg));
+      await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('SL failed', e.response?.data?.msg));
     }
 
     // Place Take Profit order if provided
@@ -106,7 +112,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
       const tpTimestamp = Date.now();
       let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${tpTimestamp}`;
       const tpSig = createSignature(tpQuery, secretKey);
-      await axios.post(`${TESTNET_URL}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('TP failed', e.response?.data?.msg));
+      await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.warn('TP failed', e.response?.data?.msg));
     }
 
     return response.data;
@@ -130,7 +136,8 @@ export async function getBinanceBalance() {
   queryString += `&signature=${signature}`;
 
   try {
-    const url = `${TESTNET_URL}/fapi/v2/account?${queryString}`;
+    const baseUrl = getBaseUrl();
+    const url = `${baseUrl}/fapi/v2/account?${queryString}`;
     const response = await axios.get(url, {
       headers: {
         'X-MBX-APIKEY': apiKey,
@@ -160,7 +167,8 @@ export async function closeBinancePosition(symbol: string) {
 
   try {
     // We check the open positions first to determine position direction and amount
-    const positionUrl = `${TESTNET_URL}/fapi/v2/positionRisk?${queryString}`;
+    const baseUrl = getBaseUrl();
+    const positionUrl = `${baseUrl}/fapi/v2/positionRisk?${queryString}`;
     const positionRes = await axios.get(positionUrl, {
       headers: { 'X-MBX-APIKEY': apiKey },
     });
@@ -177,7 +185,7 @@ export async function closeBinancePosition(symbol: string) {
         const closeSignature = createSignature(closeQueryString, secretKey);
         closeQueryString += `&signature=${closeSignature}`;
         
-        await axios.post(`${TESTNET_URL}/fapi/v1/order?${closeQueryString}`, null, {
+        await axios.post(`${baseUrl}/fapi/v1/order?${closeQueryString}`, null, {
            headers: { 'X-MBX-APIKEY': apiKey },
         });
         return { success: true, message: `Closed position of ${qty} ${symbol}` };
