@@ -755,7 +755,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
           }
           
           const sortedPts = [...userDrawings.current].sort((a, b) => a.time - b.time);
-          userSeriesRef.current.setData(sortedPts as any[]);
+          try { userSeriesRef.current.setData(sortedPts as any[]); } catch(e) {}
           
           if (activeTool === 'measure' && userDrawings.current.length === 2) {
              const p1 = userDrawings.current[0];
@@ -834,22 +834,25 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
            const price = candlestickSeriesRef.current.coordinateToPrice(y as any);
            if (price !== null) {
               const livePoint = { time: param.time as number, value: price };
-              const pts = [...userDrawings.current, livePoint].sort((a, b) => a.time - b.time);
+              const filteredDrawings = userDrawings.current.filter(p => p.time !== param.time);
+              const pts = [...filteredDrawings, livePoint].sort((a, b) => a.time - b.time);
               
               if (activeTool === 'measure') {
-                 userSeriesRef.current.setData(pts as any[]);
-                 const p1 = userDrawings.current[0];
-                 const p2 = livePoint;
-                 const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
-                 userSeriesRef.current.setMarkers([{
-                     time: p2.time,
-                     position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
-                     color: pct.startsWith('-') ? '#f23645' : '#089981',
-                     shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
-                     text: `${pct}% / ${p2.value.toFixed(2)}`,
-                 }]);
+                 try {
+                     userSeriesRef.current.setData(pts as any[]);
+                     const p1 = userDrawings.current[0];
+                     const p2 = livePoint;
+                     const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
+                     userSeriesRef.current.setMarkers([{
+                         time: p2.time,
+                         position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+                         color: pct.startsWith('-') ? '#f23645' : '#089981',
+                         shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
+                         text: `${pct}% / ${p2.value.toFixed(2)}`,
+                     }]);
+                 } catch(e) {}
               } else if (activeTool !== 'rectangle') {
-                 userSeriesRef.current.setData(pts as any[]);
+                 try { userSeriesRef.current.setData(pts as any[]); } catch(e) {}
               }
            }
         }
