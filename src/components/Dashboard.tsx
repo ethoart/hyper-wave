@@ -1149,6 +1149,53 @@ plot(close)"
                              </div>
                            )}
                          </div>
+
+                         <div className="mt-4">
+                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Pending Auto-Trades</div>
+                           {openTrades.length === 0 ? (
+                             <div className="text-sm text-[#787b86] italic py-2">No pending trades.</div>
+                           ) : (
+                             <div className="flex flex-col gap-2">
+                               {openTrades.map((trade: any) => (
+                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className="text-xs text-[#787b86]">
+                                          {trade.binanceOrderId ? <span className="text-[#2962ff] font-bold">LIVE</span> : 'Waiting Entry'}
+                                        </span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>
+                                        <span className="text-xs text-[#089981]">Target: {trade.target}</span>
+                                     </div>
+                                     <div className="text-[10px] text-[#787b86]">Auto Amount: ${trade.amount}</div>
+                                  </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
+
+                         <div className="mt-4 mb-4">
+                           <div className="text-xs text-[#787b86] font-bold mb-2 uppercase">Recent Outcomes</div>
+                           {closedTrades.length === 0 ? (
+                             <div className="text-sm text-[#787b86] italic py-2">No completed trades yet.</div>
+                           ) : (
+                             <div className="flex flex-col gap-2">
+                               {closedTrades.map((trade: any) => (
+                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left">
+                                     <div className="flex justify-between items-center w-full mb-1">
+                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full">
+                                        <span className="text-xs text-[#787b86]">Realized:</span>
+                                        <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
+                                     </div>
+                                  </div>
+                               ))}
+                             </div>
+                           )}
+                         </div>
                       </div>
                    ) : rightSidebarTab === 'market' ? (
                       <div className="flex flex-col gap-4 flex-1 h-full min-h-[500px]">

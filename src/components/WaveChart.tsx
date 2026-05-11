@@ -746,19 +746,20 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
              }
           }
           
+          const newPoint = { time: param.time as number, value: price };
           const existingIndex = userDrawings.current.findIndex(p => p.time === param.time);
           if (existingIndex >= 0) {
             userDrawings.current[existingIndex].value = price;
           } else {
-            userDrawings.current.push({ time: param.time as number, value: price });
+            userDrawings.current.push(newPoint);
           }
-          userDrawings.current.sort((a, b) => a.time - b.time);
           
-          userSeriesRef.current.setData(userDrawings.current as any[]);
+          const sortedPts = [...userDrawings.current].sort((a, b) => a.time - b.time);
+          userSeriesRef.current.setData(sortedPts as any[]);
           
           if (activeTool === 'measure' && userDrawings.current.length === 2) {
              const p1 = userDrawings.current[0];
-             const p2 = userDrawings.current[1];
+             const p2 = userDrawings.current[1]; // actual second click
              const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
              userSeriesRef.current.setMarkers([{
                  time: p2.time,
@@ -821,10 +822,45 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
         }
       };
 
+      const handleCrosshairMove = (param: any) => {
+        if (!param.point || !param.time || !candlestickSeriesRef.current || !userSeriesRef.current) return;
+        if (activeTool === 'pen') return;
+        
+        let maxPoints = 2;
+        if (activeTool === 'parallel') maxPoints = 3;
+        
+        if (userDrawings.current.length > 0 && userDrawings.current.length < maxPoints) {
+           const y = param.point.y;
+           const price = candlestickSeriesRef.current.coordinateToPrice(y as any);
+           if (price !== null) {
+              const livePoint = { time: param.time as number, value: price };
+              const pts = [...userDrawings.current, livePoint].sort((a, b) => a.time - b.time);
+              
+              if (activeTool === 'measure') {
+                 userSeriesRef.current.setData(pts as any[]);
+                 const p1 = userDrawings.current[0];
+                 const p2 = livePoint;
+                 const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
+                 userSeriesRef.current.setMarkers([{
+                     time: p2.time,
+                     position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+                     color: pct.startsWith('-') ? '#f23645' : '#089981',
+                     shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
+                     text: `${pct}% / ${p2.value.toFixed(2)}`,
+                 }]);
+              } else if (activeTool !== 'rectangle') {
+                 userSeriesRef.current.setData(pts as any[]);
+              }
+           }
+        }
+      };
+
       chart.subscribeClick(handleClick);
+      chart.subscribeCrosshairMove(handleCrosshairMove);
 
       return () => {
         chart.unsubscribeClick(handleClick);
+        chart.unsubscribeCrosshairMove(handleCrosshairMove);
         window.removeEventListener('keydown', handleKeyDown);
       };
     } else {
