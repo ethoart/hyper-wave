@@ -129,8 +129,8 @@ export function Dashboard() {
      const fetchOrderBook = async () => {
          if (!symbol) return;
          try {
-             // using fapi to match the pair data we are querying
-             const res = await axios.get(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol}&limit=15`);
+             // using proxy to avoid CORS
+             const res = await axios.get(`/api/market/depth?symbol=${symbol}&limit=15`);
              if (active) {
                  setOrderBook({
                      bids: res.data.bids || [],

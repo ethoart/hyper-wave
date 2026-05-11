@@ -393,6 +393,16 @@ async function startServer() {
   });
 
   // Binance & Analysis Data
+  app.get('/api/market/depth', async (req: any, res) => {
+    const { symbol = 'BTCUSDT', limit = '15' } = req.query;
+    try {
+        const response = await axios.get(`https://fapi.binance.com/fapi/v1/depth?symbol=${symbol.toUpperCase()}&limit=${limit}`);
+        res.json(response.data);
+    } catch(err: any) {
+        res.status(500).json({ error: 'Failed to fetch depth' });
+    }
+  });
+
   app.get('/api/market/klines', async (req: any, res) => {
     let { symbol = 'BTCUSDT', interval = '1d', limit = '100' } = req.query;
     if (interval === 'undefined') interval = '1d';
