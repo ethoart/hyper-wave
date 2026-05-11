@@ -530,11 +530,8 @@ async function startServer() {
       
       const data = response.data.filter((d: any) => 
         d.symbol.endsWith('USDT') && 
-        !d.symbol.includes('USDC') &&
-        !d.symbol.includes('FDUSD') &&
-        !d.symbol.includes('TUSD') &&
-        !d.symbol.includes('BUSD') &&
-        !d.symbol.includes('EUR') &&
+        d.symbol !== 'USUSDT' &&
+        !['USDC', 'FDUSD', 'TUSD', 'BUSD', 'EUR', 'USDP'].some(s => d.symbol.includes(s)) &&
         parseFloat(d.quoteVolume) > 1000000 // allow small pairs too
       );
       
@@ -792,17 +789,17 @@ async function startServer() {
         
         let errorMsg = aiError.message || "Unknown error";
         if (errorMsg.includes("Quota") || aiError.status === 429) {
-           errorMsg = "The AI service free-tier quota was exceeded. Please try again in 1 minute.";
+           errorMsg = "AI Quota Exceeded";
         } else if (errorMsg.includes("503") || aiError.status === 503 || errorMsg.includes("high demand") || errorMsg.includes("overloaded")) {
-           errorMsg = "The AI model is overloaded with high demand. Please try again later.";
+           errorMsg = "AI High Demand - Math Engine Active";
         } else if (errorMsg.includes("scopes")) {
-           errorMsg = "Invalid API key or permissions.";
+           errorMsg = "Invalid API Key";
         } else if (errorMsg.includes("JSON") || errorMsg.includes("Unexpected token")) {
-           errorMsg = "The AI returned malformed logic JSON. Utilizing math engine backup.";
+           errorMsg = "AI Parser Error - Math Engine Active";
         }
         
         result = {
-          analysisText: `⚠️ AI connection failed: ${errorMsg}\n\nDisplaying strictly algorithmic math engine output:\n\n${algoResult?.reasoning || 'No actionable trade could be computed at this time. Market structure is unclear.'}`,
+          analysisText: `${algoResult?.reasoning || 'No actionable trade could be computed at this time. Market structure is unclear.'}\n\n[Note: ${errorMsg}]`,
           winRate: algoResult ? "70%" : "-",
           entryPoint: algoResult?.entry || data[data.length - 1].close,
           exitPoint: algoResult?.target || data[data.length - 1].close,
@@ -885,7 +882,7 @@ async function startServer() {
       console.log('Running background Auto-Scanner...');
       const response = await axios.get('https://fapi.binance.com/fapi/v1/ticker/24hr');
       const data = response.data.filter((d: any) => 
-        d.symbol.endsWith('USDT') && !['USDC', 'FDUSD', 'TUSD', 'BUSD', 'EUR'].some(s => d.symbol.includes(s)) && parseFloat(d.quoteVolume) > 1000000
+        d.symbol.endsWith('USDT') && d.symbol !== 'USUSDT' && !['USDC', 'FDUSD', 'TUSD', 'BUSD', 'EUR', 'USDP'].some(s => d.symbol.includes(s)) && parseFloat(d.quoteVolume) > 1000000
       );
       data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
       
