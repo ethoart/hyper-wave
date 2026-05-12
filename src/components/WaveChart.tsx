@@ -784,10 +784,13 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                     const levelPrice = p1.value + diff * l;
                     if (auxiliarySeriesRef.current[i]) {
                         try {
+                            const t1 = p1.time as number;
+                            let t2 = p2.time as number;
+                            if (t1 === t2) t2 = t1 + 1000;
                             auxiliarySeriesRef.current[i].setData([
-                                { time: p1.time, value: levelPrice },
-                                { time: p2.time, value: levelPrice }
-                            ].sort((a,b) => a.time - b.time));
+                                { time: t1, value: levelPrice },
+                                { time: t2, value: levelPrice }
+                            ].sort((a,b) => (a.time as number) - (b.time as number)));
                         } catch(e) {}
                     }
                 });
@@ -914,10 +917,13 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                      const levelPrice = p1.value + diff * l;
                      if (auxiliarySeriesRef.current[i]) {
                          try {
+                             const t1 = p1.time as number;
+                             let t2 = p2.time as number;
+                             if (t1 === t2) t2 = t1 + 1000;
                              auxiliarySeriesRef.current[i].setData([
-                                 { time: p1.time, value: levelPrice },
-                                 { time: p2.time, value: levelPrice }
-                             ].sort((a,b) => a.time - b.time));
+                                 { time: t1, value: levelPrice },
+                                 { time: t2, value: levelPrice }
+                             ].sort((a,b) => (a.time as number) - (b.time as number)));
                          } catch(e) {}
                      }
                  });
