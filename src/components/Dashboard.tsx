@@ -8,7 +8,7 @@ import {
   MousePointer2, Crosshair, PenTool, TrendingUp, Search,
   PlayCircle, Loader2, List, Activity, Settings, LogOut, Code,
   Bell, BellRing, DollarSign, Send, Menu, X, PlusSquare,
-  AlignJustify, Square, Ruler, Spline, PanelRightClose, PanelRightOpen
+  AlignJustify, Square, Ruler, Spline, PanelRightClose, PanelRightOpen, Share2
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ethers } from 'ethers';
@@ -17,6 +17,7 @@ export function Dashboard() {
   const { user, logout } = useAuth();
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [activeAnalysis, setActiveAnalysis] = useState<any>(null);
+  const [profitCard, setProfitCard] = useState<any>(null);
   
   const [symbolInput, setSymbolInput] = useState(() => localStorage.getItem('hyperwave_symbol') || 'BTCUSDT');
   const [symbol, setSymbol] = useState(() => localStorage.getItem('hyperwave_symbol') || 'BTCUSDT');
@@ -1172,7 +1173,7 @@ plot(close)"
                            ) : (
                              <div className="flex flex-col gap-2">
                                {openTrades.map((trade: any) => (
-                                  <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors">
+                                  <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors relative">
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
                                         <span className="text-xs text-[#787b86]">
@@ -1182,6 +1183,7 @@ plot(close)"
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>
                                         <span className="text-xs text-[#089981]">Target: {trade.target}</span>
+                                        <span className="text-xs text-[#f23645]">SL: {trade.stopLoss}</span>
                                      </div>
                                      <div className="text-[10px] text-[#787b86]">Auto Amount: ${trade.amount}</div>
                                   </div>
@@ -1197,12 +1199,26 @@ plot(close)"
                            ) : (
                              <div className="flex flex-col gap-2">
                                {closedTrades.map((trade: any) => (
-                                  <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors">
-                                     <div className="flex justify-between items-center w-full mb-1">
+                                  <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left hover:border-[#2962ff] transition-colors relative group">
+                                     <div className="flex justify-between items-center w-full mb-1 cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
-                                        <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>
+                                        <div className="flex items-center gap-2">
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); setProfitCard(trade); }}
+                                            className="hidden group-hover:block text-[#787b86] hover:text-[#2962ff]"
+                                            title="Share Profit Card"
+                                          >
+                                            <Share2 className="w-4 h-4" />
+                                          </button>
+                                          <span className={`text-sm font-bold ${trade.status === 'win' ? 'text-[#089981]' : trade.status === 'loss' ? 'text-[#f23645]' : 'text-[#787b86]'}`}>{trade.status.toUpperCase()}</span>
+                                        </div>
                                      </div>
-                                     <div className="flex justify-between items-center w-full">
+                                     <div className="flex justify-between items-center w-full mb-1 text-xs text-[#787b86] cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
+                                        <span>Entry: {trade.entry}</span>
+                                        <span className={trade.status === 'win' ? 'text-[#089981]' : ''}>Target: {trade.target}</span>
+                                        <span className={trade.status === 'loss' ? 'text-[#f23645]' : ''}>SL: {trade.stopLoss}</span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
                                         <span className="text-xs text-[#787b86]">Realized:</span>
                                         <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
                                      </div>
@@ -1576,6 +1592,53 @@ plot(close)"
                 )}
              </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profit Card Modal */}
+      <Dialog open={!!profitCard} onOpenChange={(o) => !o && setProfitCard(null)}>
+        <DialogContent className="bg-[#131722] border-none text-white max-w-sm rounded p-0 overflow-hidden shadow-[0_0_50px_rgba(41,98,255,0.15)] focus:outline-none">
+           <DialogHeader className="hidden">
+             <DialogTitle>Profit Card</DialogTitle>
+           </DialogHeader>
+           {profitCard && (
+              <div className="flex flex-col relative w-full h-[400px] items-center justify-center bg-gradient-to-br from-[#131722] to-[#1e222d] border border-[#2a2e39] rounded overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#2962ff] to-[#089981]" />
+                
+                <h2 className="text-xl font-bold tracking-widest text-[#787b86] uppercase mb-6">Hyperwave</h2>
+                
+                <div className="flex flex-col items-center z-10 mb-6">
+                  <div className="text-3xl font-black text-white dropshadow-md mb-2 flex items-center gap-2">
+                     {profitCard.symbol} <span className={profitCard.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{profitCard.trend === 'bullish' ? 'LONG' : 'SHORT'}</span>
+                  </div>
+                  <div className={`text-5xl font-black ${profitCard.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                    {profitCard.realizedPnl > 0 ? '+' : ''}{(profitCard.pnlPercent || 0).toFixed(2)}%
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-center z-10 bg-[#1e222d]/80 px-8 py-4 rounded border border-[#2a2e39]/50 shadow-inner">
+                  <div className="flex flex-col">
+                    <span className="text-[#787b86] text-[10px] uppercase tracking-wider font-bold mb-1">Entry</span>
+                    <span className="text-white font-mono text-sm">{profitCard.entry}</span>
+                  </div>
+                  {profitCard.status === 'win' ? (
+                     <div className="flex flex-col">
+                       <span className="text-[#089981] text-[10px] uppercase tracking-wider font-bold mb-1">Target</span>
+                       <span className="text-[#089981] font-mono text-sm">{profitCard.target}</span>
+                     </div>
+                  ) : (
+                     <div className="flex flex-col">
+                       <span className="text-[#f23645] text-[10px] uppercase tracking-wider font-bold mb-1">SL Hit</span>
+                       <span className="text-[#f23645] font-mono text-sm">{profitCard.stopLoss}</span>
+                     </div>
+                  )}
+                </div>
+                
+                <div className="absolute bottom-4 text-[10px] text-[#787b86] opacity-50 tracking-widest font-bold">
+                  AI-POWERED ALGO ENGINE
+                </div>
+              </div>
+           )}
         </DialogContent>
       </Dialog>
     </div>
