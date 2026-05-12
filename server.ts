@@ -88,6 +88,7 @@ const userTradeSchema = new mongoose.Schema({
   stopLoss: Number,
   binanceOrderId: String,
   status: { type: String, enum: ['pending', 'live', 'win', 'loss', 'expired', 'closed'], default: 'pending' },
+  isAuto: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
   resolvedAt: Date
 });
@@ -572,7 +573,7 @@ async function startServer() {
       }
       const pendingTrades = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
       const closedSignals = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
-      const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed' }).sort({ resolvedAt: -1 }).limit(20);
+      const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed', isAuto: { $ne: true } }).sort({ resolvedAt: -1 }).limit(20);
       
       const closed = [
          ...closedSignals.map(sig => ({ 
@@ -1187,7 +1188,13 @@ async function startServer() {
             
             for (const alert of foundAlerts) {
                try {
-                   const existing = await TradeSignal.findOne({ symbol: alert.symbol, status: { $in: ['pending', 'live'] }, trend: alert.trend });
+                   const existing = await TradeSignal.findOne({ 
+                       symbol: alert.symbol,
+                       $or: [
+                           { status: { $in: ['pending', 'live'] } },
+                           { createdAt: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } }
+                       ]
+                   });
                    if (!existing && activeCount < 3) {
                        let currentBudget = engineCfg.autoBotBalance || 100;
                        if (currentBudget <= 5) {
@@ -1326,7 +1333,8 @@ async function startServer() {
                                               target: signal.target,
                                               stopLoss: signal.stopLoss,
                                               binanceOrderId: orderTrackingId,
-                                              status: 'live'
+                                              status: 'live',
+                                              isAuto: true
                                             });
                                         }
                                      } catch(err) {

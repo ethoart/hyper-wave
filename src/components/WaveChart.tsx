@@ -31,6 +31,8 @@ const AVAILABLE_INDICATORS = [
   { id: 'macd', name: 'MACD', defaultOptions: { fast: 12, slow: 26, signal: 9 }, description: 'Moving Avg Convergence Divergence' },
 ];
 
+const getNumericTime = (t: any): number => { if (typeof t === "number") return t; if (typeof t === "string") return new Date(t).getTime(); if (t && typeof t === "object" && t.year) return new Date(t.year, t.month - 1, t.day).getTime(); return 0; };
+
 export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exitPoint, stopLoss, wavePoints, trend, activeTool, drawingColor = '#2962ff', clearDrawings = 0, channelPoints, flagPoints, onToolDone }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const rsiContainerRef = useRef<HTMLDivElement>(null);
@@ -177,7 +179,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
      let pLines: any[] = [];
 
      if (shape.tool === 'measure' && shape.points.length === 2) {
-         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         const sortedPoints = [...shape.points].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
          try { userSrs.setData(sortedPoints); } catch(e) {}
          const p1 = shape.points[0];
          const p2 = shape.points[1];
@@ -190,7 +192,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
             }]);
          } catch(e) {}
      } else if (shape.tool === 'fibonacci' && shape.points.length === 2) {
-         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         const sortedPoints = [...shape.points].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
          try { userSrs.setData(sortedPoints); } catch(e) {}
          const p1 = shape.points[0]; const p2 = shape.points[1];
          const diff = p2.value - p1.value;
@@ -207,7 +209,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const t1 = p1.time as number;
                 let t2 = p2.time as number;
                 if (t1 === t2) t2 = t1 + 1000;
-                const pData = t1 < t2 ? [
+                const pData = getNumericTime(t1) < getNumericTime(t2) ? [
                     { time: t1 as any, value: levelPrice },
                     { time: t2 as any, value: levelPrice }
                 ] : [
@@ -223,15 +225,15 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
          const topSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
          const botSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
          try {
-             topSrs.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
-             botSrs.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+             topSrs.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
+             botSrs.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
          } catch(e) {}
          auxSeries.push(topSrs, botSrs);
          try {
             (userSrs as any).setMarkers([
                { time: p1.time, position: 'inBar', color: shape.color, shape: 'square', text: '' },
                { time: p2.time, position: 'inBar', color: shape.color, shape: 'square', text: '' }
-            ].sort((a,b) => a.time - b.time));
+            ].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
          } catch(e) {}
      } else if (shape.tool === 'parallel' && shape.points.length === 3) {
          const p1 = shape.points[0]; const p2 = shape.points[1]; const p3 = shape.points[2];
@@ -239,12 +241,12 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
          const newIntercept = p3.value - slope * p3.time;
          const parLine = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
          try {
-             parLine.setData([{ time: p1.time, value: slope * p1.time + newIntercept }, { time: p2.time, value: slope * p2.time + newIntercept }].sort((a,b) => a.time - b.time));
+             parLine.setData([{ time: p1.time, value: slope * p1.time + newIntercept }, { time: p2.time, value: slope * p2.time + newIntercept }].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
          } catch(e) {}
          auxSeries.push(parLine);
-         try { userSrs.setData([p1, p2].sort((a,b) => a.time - b.time)); } catch(e) {}
+         try { userSrs.setData([p1, p2].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time))); } catch(e) {}
      } else {
-         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         const sortedPoints = [...shape.points].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
          try { userSrs.setData(sortedPoints); } catch(e) {} // trend, pen, etc
      }
 
@@ -315,7 +317,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
       low: d.low,
       close: d.close,
     }));
-    formattedData.sort((a, b) => a.time - b.time);
+    formattedData.sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
 
     if (chartRef.current && candlestickSeriesRef.current) {
         // If chart exists, just update data to avoid full recreation flash
@@ -438,7 +440,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
       // Deduplicate by time and sort
       const uniqueTimes = new Set();
       validPoints = validPoints
-        .sort((a, b) => a.time - b.time)
+        .sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time))
         .filter(p => {
             if (uniqueTimes.has(p.time)) return false;
             uniqueTimes.add(p.time);
@@ -481,7 +483,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  }
              });
              
-             markers.sort((a, b) => a.time - b.time);
+             markers.sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
              (candlestickSeries as any).setMarkers(markers);
          }
       } catch (err) {
@@ -509,7 +511,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                    timeVal = Math.floor(new Date(timeVal).getTime() / 1000);
                  }
                  return { time: timeVal, value: p.price };
-              }).sort((a: any, b: any) => a.time - b.time);
+              }).sort((a: any, b: any) => getNumericTime(a.time) - getNumericTime(b.time));
               
               // deduplicate
               const uTimes = new Set();
@@ -753,7 +755,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  userDrawings.current.push(newPoint);
              }
              
-             const sortedPts = [...userDrawings.current].sort((a, b) => a.time - b.time);
+             const sortedPts = [...userDrawings.current].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
              try { userSeriesRef.current.setData(sortedPts as any[]); } catch(e) {}
              
              if (activeTool === 'measure' && userDrawings.current.length === 2) {
@@ -795,7 +797,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                             let t2 = p2.time as number;
                             if (t1 === t2) t2 = t1 + 1000;
                             // Ensure strict ordering
-                            const pData = t1 < t2 ? [
+                            const pData = getNumericTime(t1) < getNumericTime(t2) ? [
                                 { time: t1 as any, value: levelPrice },
                                 { time: t2 as any, value: levelPrice }
                             ] : [
@@ -812,8 +814,8 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const topSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
                 const bottomSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
                 try {
-                    topSeries.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
-                    bottomSeries.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+                    topSeries.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
+                    bottomSeries.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
                 } catch(e) {}
                 auxiliarySeriesRef.current.push(topSeries, bottomSeries);
                 
@@ -821,7 +823,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                    (userSeriesRef.current as any).setMarkers([
                       { time: p1.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
                       { time: p2.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
-                   ].sort((a,b) => a.time - b.time));
+                   ].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
                 } catch(e) {}
                 try { userSeriesRef.current.setData([]); } catch(e) {}
              } else if (activeTool === 'parallel' && userDrawings.current.length === 3) {
@@ -837,7 +839,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                    parallelLine.setData([
                       { time: p1.time, value: slope * p1.time + newIntercept },
                       { time: p2.time, value: slope * p2.time + newIntercept }
-                   ].sort((a,b) => a.time - b.time));
+                   ].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time)));
                 } catch(e) {}
                 auxiliarySeriesRef.current.push(parallelLine);
                 
@@ -890,7 +892,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
            if (price !== null) {
               const livePoint = { time: param.time as number, value: price };
               const filteredDrawings = userDrawings.current.filter(p => p.time !== param.time);
-              const pts = [...filteredDrawings, livePoint].sort((a, b) => a.time - b.time);
+              const pts = [...filteredDrawings, livePoint].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
               
               if (activeTool === 'measure') {
                  try {
@@ -932,7 +934,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                              const t1 = p1.time as number;
                              let t2 = p2.time as number;
                              if (t1 === t2) t2 = t1 + 1000;
-                             const pData = t1 < t2 ? [
+                             const pData = getNumericTime(t1) < getNumericTime(t2) ? [
                                  { time: t1 as any, value: levelPrice },
                                  { time: t2 as any, value: levelPrice }
                              ] : [
