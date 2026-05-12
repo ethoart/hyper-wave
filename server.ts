@@ -601,20 +601,20 @@ async function startServer() {
                 const currentPrice = parseFloat(tickRes.data.price);
                 let pnlNum = 0;
                 if (pt.side === 'BUY') {
-                    pnlNum = (currentPrice - pt.entry) / pt.entry * pt.amount * 10; // assuming 10x
+                    pnlNum = (currentPrice - pt.entryPrice) / pt.entryPrice * pt.amount * 10; // assuming 10x
                 } else {
-                    pnlNum = (pt.entry - currentPrice) / pt.entry * pt.amount * 10;
+                    pnlNum = (pt.entryPrice - currentPrice) / pt.entryPrice * pt.amount * 10;
                 }
                 livePositions.push({
                    symbol: pt.symbol,
                    amount: pt.amount,
                    side: pt.side,
-                   entryPrice: pt.entry,
+                   entryPrice: pt.entryPrice,
                    unRealizedProfit: pnlNum,
                    leverage: 10,
                    markPrice: currentPrice,
                    binanceOrderId: pt.binanceOrderId,
-                   target: pt.target,
+                   target: pt.takeProfit,
                    stopLoss: pt.stopLoss
                 });
              } catch(e) {}
@@ -785,9 +785,9 @@ async function startServer() {
                const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
                const currentPrice = parseFloat(tickRes.data.price);
                if (userPaperTrade.side === 'BUY') {
-                   realizedPnl = (currentPrice - userPaperTrade.entry) / userPaperTrade.entry * userPaperTrade.amount * 10;
+                   realizedPnl = (currentPrice - userPaperTrade.entryPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * 10;
                } else {
-                   realizedPnl = (userPaperTrade.entry - currentPrice) / userPaperTrade.entry * userPaperTrade.amount * 10;
+                   realizedPnl = (userPaperTrade.entryPrice - currentPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * 10;
                }
            } catch(e) {}
            
@@ -1139,14 +1139,13 @@ async function startServer() {
                   rawLossUsdt = (positionSizeUsdt / algoResult.entry) * (slPrice - algoResult.entry);
               }
 
-              if (rawLossUsdt > 5 || rawLossUsdt < 2) {
-                  const targetLoss = Math.min(Math.max(rawLossUsdt, 2), 4.5);
-                  const allowedPriceDiff = (targetLoss / positionSizeUsdt) * algoResult.entry;
-                  if (algoResult.trend === 'bullish') {
-                      slPrice = algoResult.entry - allowedPriceDiff;
-                  } else {
-                      slPrice = algoResult.entry + allowedPriceDiff;
-                  }
+              let recommendedAmount = tradeAmountDollars;
+              if (rawLossUsdt > 4.5) {
+                   // reduce position size to cap risk at $4.50
+                   recommendedAmount = (4.5 / rawLossUsdt) * tradeAmountDollars;
+              } else if (rawLossUsdt < 1.0) {
+                   // increase position size to risk at least $1.00
+                   recommendedAmount = Math.min((1.0 / rawLossUsdt) * tradeAmountDollars, 20); // max scale up
               }
 
               if (entryDiff < 0.15 && projectedProfit >= 0.1) {
@@ -1158,6 +1157,7 @@ async function startServer() {
                    entry: algoResult.entry,
                    target: algoResult.target,
                    stopLoss: slPrice,
+                   amount: recommendedAmount,
                    reasoning: algoResult.reasoning,
                    currentPrice: currentPrice,
                    projectedProfit
@@ -1207,7 +1207,7 @@ async function startServer() {
                        const tradeAmountDollars = +(currentBudget / 3).toFixed(2);
                        const leverage = 10;
                        
-                       const activePosSize = tradeAmountDollars * leverage;
+                       let activePosSize = tradeAmountDollars * leverage;
                        let activeSl = alert.stopLoss;
                        
                        let activeRawLoss = 0;
@@ -1217,15 +1217,13 @@ async function startServer() {
                            activeRawLoss = (activePosSize / alert.entry) * (activeSl - alert.entry);
                        }
 
-                       if (activeRawLoss > 5 || activeRawLoss < 2) {
-                           const targetLoss = Math.min(Math.max(activeRawLoss, 2), 4.5);
-                           const allowedPriceDiff = (targetLoss / activePosSize) * alert.entry;
-                           if (alert.trend === 'bullish') {
-                               activeSl = alert.entry - allowedPriceDiff;
-                           } else {
-                               activeSl = alert.entry + allowedPriceDiff;
-                           }
+                       let finalAmount = tradeAmountDollars;
+                       if (activeRawLoss > 4.5) {
+                           finalAmount = (4.5 / activeRawLoss) * tradeAmountDollars;
+                       } else if (activeRawLoss < 1.0) {
+                           finalAmount = Math.min((1.0 / activeRawLoss) * tradeAmountDollars, 20);
                        }
+                       activePosSize = finalAmount * leverage;
 
                        const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
                        await TradeSignal.create({
@@ -1234,7 +1232,7 @@ async function startServer() {
                            entry: alert.entry,
                            target: alert.target,
                            stopLoss: activeSl,
-                           amount: tradeAmountDollars,
+                           amount: finalAmount,
                            expiresAt,
                            setupData: { reasoning: alert.reasoning, params: alert }
                        });
