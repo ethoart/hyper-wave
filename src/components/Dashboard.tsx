@@ -306,9 +306,9 @@ export function Dashboard() {
                      close: parseFloat(d.close),
                      volume: parseFloat(d.volume)
                    };
-                   if (!window.initialTickDone) {
+                   if (!(window as any).initialTickDone) {
                       console.log("Polling live candle:", liveCandle);
-                      window.initialTickDone = true;
+                      (window as any).initialTickDone = true;
                    }
                    setLiveCandle(liveCandle);
                }
@@ -923,6 +923,7 @@ plot(close)"
                    activeTool={activeTool}
                    drawingColor={drawingColor}
                    clearDrawings={clearDrawings}
+                   onToolDone={() => setActiveTool('crosshair')}
                 />
               </div>
               {additionalCharts.map((c, i) => (
@@ -1205,7 +1206,7 @@ plot(close)"
                                         <div className="flex items-center gap-2">
                                           <button 
                                             onClick={(e) => { e.stopPropagation(); setProfitCard(trade); }}
-                                            className="hidden group-hover:block text-[#787b86] hover:text-[#2962ff]"
+                                            className="text-[#787b86] hover:text-[#2962ff]"
                                             title="Share Profit Card"
                                           >
                                             <Share2 className="w-4 h-4" />
@@ -1217,6 +1218,9 @@ plot(close)"
                                         <span>Entry: {trade.entry}</span>
                                         <span className={trade.status === 'win' ? 'text-[#089981]' : ''}>Target: {trade.target}</span>
                                         <span className={trade.status === 'loss' ? 'text-[#f23645]' : ''}>SL: {trade.stopLoss}</span>
+                                     </div>
+                                     <div className="flex justify-between items-center w-full mb-1 text-xs text-[#787b86] cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
+                                        <span>Exit: {trade.status === 'win' ? trade.target : trade.status === 'loss' ? trade.stopLoss : 'Manual'}</span>
                                      </div>
                                      <div className="flex justify-between items-center w-full cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
                                         <span className="text-xs text-[#787b86]">Realized:</span>

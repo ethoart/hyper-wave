@@ -10,7 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import crypto from 'crypto';
 import { analyzeElliottWaves } from './ewEngine.js';
-import { placeBinanceTrade, closeBinancePosition, getBinanceBalance, getBinancePositions } from './binanceService.js';
+import { placeBinanceTrade, closeBinancePosition, getBinanceBalance, getBinancePositions, setBinanceLeverage } from './binanceService.js';
 
 dotenv.config();
 
@@ -34,11 +34,15 @@ const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'pro', 'user'], default: 'user' }
+  role: { type: String, enum: ['admin', 'pro', 'user'], default: 'user' },
+  binanceApiKey: { type: String },
+  binanceSecretKey: { type: String },
+  useCustomAlgo: { type: Boolean, default: false },
+  pineCode: { type: String }
 });
 
 // Avoid OverwriteModelError during hot reload
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User: any = mongoose.models.User || mongoose.model('User', userSchema);
 
 const analysisSchema = new mongoose.Schema({
   symbol: String,
@@ -53,7 +57,7 @@ const analysisSchema = new mongoose.Schema({
   chartData: mongoose.Schema.Types.Mixed, // store some historical data used for snapshot
   wavePoints: [{ time: Number, price: Number }]
 });
-const Analysis = mongoose.models.Analysis || mongoose.model('Analysis', analysisSchema);
+const Analysis: any = mongoose.models.Analysis || mongoose.model('Analysis', analysisSchema);
 
 const tradeSignalSchema = new mongoose.Schema({
   symbol: String,
@@ -72,7 +76,22 @@ const tradeSignalSchema = new mongoose.Schema({
   binanceOrderId: String,
   quantityExecuted: String,
 });
-const TradeSignal = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
+const TradeSignal: any = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
+
+const userTradeSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  symbol: String,
+  side: { type: String, enum: ['BUY', 'SELL'] },
+  amount: Number,
+  entry: Number,
+  target: Number,
+  stopLoss: Number,
+  binanceOrderId: String,
+  status: { type: String, enum: ['pending', 'live', 'win', 'loss', 'expired', 'closed'], default: 'pending' },
+  timestamp: { type: Date, default: Date.now },
+  resolvedAt: Date
+});
+const UserTrade: any = mongoose.models.UserTrade || mongoose.model('UserTrade', userTradeSchema);
 
 const engineConfigSchema = new mongoose.Schema({
   id: { type: String, default: 'global' },
@@ -81,7 +100,7 @@ const engineConfigSchema = new mongoose.Schema({
   autoBotBalance: { type: Number, default: 100 },
   updatedAt: { type: Date, default: Date.now }
 });
-const EngineConfig = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
+const EngineConfig: any = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
 
 const scriptItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -94,7 +113,7 @@ const scriptItemSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
   subscribers: [String] // emails of licensed users
 });
-const ScriptItem = mongoose.models.ScriptItem || mongoose.model('ScriptItem', scriptItemSchema);
+const ScriptItem: any = mongoose.models.ScriptItem || mongoose.model('ScriptItem', scriptItemSchema);
 
 const chartDrawingSchema = new mongoose.Schema({
   userEmail: { type: String, required: true },
@@ -103,7 +122,7 @@ const chartDrawingSchema = new mongoose.Schema({
   drawings: mongoose.Schema.Types.Mixed,
   updatedAt: { type: Date, default: Date.now }
 });
-const ChartDrawing = mongoose.models.ChartDrawing || mongoose.model('ChartDrawing', chartDrawingSchema);
+const ChartDrawing: any = mongoose.models.ChartDrawing || mongoose.model('ChartDrawing', chartDrawingSchema);
 
 // -----------------------------------------------------
 // 2. Main Server Setup
@@ -287,6 +306,33 @@ async function startServer() {
        res.json({ success: true });
     } catch(err) {
        res.status(500).json({ error: 'Failed to update user' });
+    }
+  });
+
+  // PRO Users Settings
+  app.get('/api/users/settings', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.json({});
+    try {
+      const user = await (User as any).findById(req.user._id).select('-password');
+      res.json(user);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/users/settings', authMiddleware, async (req: any, res) => {
+    if (!isDbConnected) return res.status(500).json({ error: 'Database is not connected.' });
+    if (req.user.role !== 'pro' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only PRO users can update these settings' });
+    }
+    try {
+      const { binanceApiKey, binanceSecretKey, useCustomAlgo, pineCode } = req.body;
+      const user = await (User as any).findByIdAndUpdate(req.user._id, {
+        binanceApiKey, binanceSecretKey, useCustomAlgo, pineCode
+      }, { new: true }).select('-password');
+      res.json({ success: true, message: 'Settings updated successfully', user });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to update settings' });
     }
   });
 
@@ -519,7 +565,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/trades', async (req: any, res) => {
+  app.get('/api/trades', authMiddleware, async (req: any, res) => {
     try {
       if (!isDbConnected) {
          return res.json({ pending: [], closed: [], livePositions: [] });
@@ -530,8 +576,11 @@ async function startServer() {
       let balance = 0;
       let livePositions: any[] = [];
       try {
-         balance = await getBinanceBalance() || 0;
-         livePositions = await getBinancePositions() || [];
+         const user = await User.findById(req.user._id);
+         const apiKey = user?.binanceApiKey;
+         const secretKey = user?.binanceSecretKey;
+         balance = await getBinanceBalance(apiKey, secretKey) || 0;
+         livePositions = await getBinancePositions(apiKey, secretKey) || [];
       } catch(e) { }
 
       let engineCfg = await EngineConfig.findOne({ id: 'global' });
@@ -570,17 +619,19 @@ async function startServer() {
   });
 
   app.post('/api/trade/place', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only Super Admin can place trades.' });
+    if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+      return res.status(403).json({ error: 'Only PRO users and Admins can place trades.' });
     }
     
-    if (!process.env.BINANCE_API_KEY || !process.env.BINANCE_SECRET_KEY) {
-      return res.status(500).json({ error: 'Binance API keys are missing in environment configuration. Cannot place real trades.' });
+    const user = await User.findById(req.user._id);
+    const apiKey = user?.binanceApiKey || process.env.BINANCE_API_KEY;
+    const apiSecret = user?.binanceSecretKey || process.env.BINANCE_SECRET_KEY;
+
+    if (!apiKey || !apiSecret) {
+      return res.status(500).json({ error: 'Binance API keys are missing. Configure them in wallet settings.' });
     }
     
     const { symbol, side, amount, leverage, takeProfit, stopLoss } = req.body;
-    const apiKey = process.env.BINANCE_API_KEY;
-    const apiSecret = process.env.BINANCE_SECRET_KEY;
     // Support Binance Testnet for demo accounts
     const isTestnet = process.env.BINANCE_TESTNET !== 'false';
     const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
@@ -617,14 +668,15 @@ async function startServer() {
   });
 
   app.post('/api/trade/tpsl', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only admin can manage TP/SL' });
+    if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+      return res.status(403).json({ error: 'Only PRO users and Admins can manage TP/SL' });
     }
     const { symbol, tp, sl, positionSide } = req.body;
     try {
-       const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-       const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
-       if (!apiKey || !secretKey) return res.status(500).json({ error: 'Configure Binance API' });
+       const user = await User.findById(req.user._id);
+       const apiKey = user?.binanceApiKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+       const secretKey = user?.binanceSecretKey || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+       if (!apiKey || !secretKey) return res.status(500).json({ error: 'Configure Binance API keys in wallet settings' });
        
        const isTestnet = process.env.BINANCE_TESTNET !== 'false';
        const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
@@ -653,12 +705,15 @@ async function startServer() {
   });
 
   app.post('/api/trade/close', authMiddleware, async (req: any, res) => {
-     if (req.user.role !== 'admin') {
-       return res.status(403).json({ error: 'Only admin can manage trades' });
+     if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+       return res.status(403).json({ error: 'Only PRO users and Admins can manage trades' });
      }
      const { symbol } = req.body;
      try {
-       const result = await closeBinancePosition(symbol);
+       const user = await User.findById(req.user._id);
+       const apiKey = user?.binanceApiKey;
+       const secretKey = user?.binanceSecretKey;
+       const result = await closeBinancePosition(symbol, apiKey, secretKey);
        res.json(result);
      } catch(e: any) {
        res.status(500).json({ error: e.message });
@@ -911,6 +966,42 @@ async function startServer() {
       
       for (const pair of topPairs) {
          try {
+            // PRO User Custom Algos
+            const evalProUsers = await (User as any).find({ 
+               role: { $in: ['pro', 'admin'] }, 
+               useCustomAlgo: true, 
+               pineCode: { $exists: true, $ne: '' },
+               binanceApiKey: { $exists: true, $ne: '' },
+               binanceSecretKey: { $exists: true, $ne: '' }
+            });
+            for (const pUser of evalProUsers) {
+               try {
+                  const customFunc = new Function('pair', 'price', pUser.pineCode);
+                  const result = customFunc(pair, parseFloat(pair.lastPrice));
+                  if (result && result.trend && result.entry && result.target && result.stopLoss) {
+                     const side = result.trend === 'bullish' ? 'BUY' : 'SELL';
+                     const leverage = 10;
+                     const positionSizeUsdt = (result.amount || 10) * leverage;
+                     const quantity = +(positionSizeUsdt / result.entry).toFixed(4);
+                     try { await setBinanceLeverage(pair.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
+                     const res = await placeBinanceTrade(pair.symbol, side, quantity, 'MARKET', result.stopLoss, result.target, pUser.binanceApiKey, pUser.binanceSecretKey);
+                     await UserTrade.create({
+                        userId: pUser._id,
+                        symbol: pair.symbol,
+                        side: side,
+                        amount: result.amount || 10,
+                        entry: result.entry,
+                        target: result.target,
+                        stopLoss: result.stopLoss,
+                        binanceOrderId: res.orderId?.toString() || 'unknown',
+                        status: 'live'
+                     });
+                  }
+               } catch(err) {
+                 // Ignore individual user script errors
+               }
+            }
+
            const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=1h&limit=200`);
            const chartData = klinesRes.data.map((d: any) => ({
              time: d[0],
@@ -1042,6 +1133,37 @@ async function startServer() {
                            expiresAt,
                            setupData: { reasoning: alert.reasoning, params: alert }
                        });
+
+                       const proUsers = await (User as any).find({ 
+                           role: { $in: ['pro', 'admin'] }, 
+                           binanceApiKey: { $exists: true, $ne: '' },
+                           binanceSecretKey: { $exists: true, $ne: '' }
+                       });
+                       for (const pUser of proUsers) {
+                           try {
+                              if (!pUser.useCustomAlgo) {
+                                 const side = alert.trend === 'bullish' ? 'BUY' : 'SELL';
+                                 const leverage = 10;
+                                 const positionSizeUsdt = tradeAmountDollars * leverage;
+                                 const quantity = +(positionSizeUsdt / alert.entry).toFixed(4);
+                                 try { await setBinanceLeverage(alert.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
+                                 const res = await placeBinanceTrade(alert.symbol, side, quantity, 'MARKET', activeSl, alert.target, pUser.binanceApiKey, pUser.binanceSecretKey);
+                                 await UserTrade.create({
+                                    userId: pUser._id,
+                                    symbol: alert.symbol,
+                                    side: side,
+                                    amount: tradeAmountDollars,
+                                    entry: alert.entry,
+                                    target: alert.target,
+                                    stopLoss: activeSl,
+                                    binanceOrderId: res.orderId?.toString() || 'unknown',
+                                    status: 'live'
+                                  });
+                              }
+                           } catch(err) {
+                              console.error('Failed to place user trade', err);
+                           }
+                       }
                    }
                } catch(e) { /* ignore */ }
             }

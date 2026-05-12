@@ -34,9 +34,9 @@ function adjustPrecision(value: number, stepSize: string) {
   return parseFloat(rounded.toFixed(precision));
 }
 
-export async function setBinanceLeverage(symbol: string, leverage: number) {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+export async function setBinanceLeverage(symbol: string, leverage: number, customKey?: string, customSecret?: string) {
+  const apiKey = customKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) return;
 
@@ -56,9 +56,9 @@ export async function setBinanceLeverage(symbol: string, leverage: number) {
   }
 }
 
-export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', quantity: number, type: string = 'MARKET', stopLoss?: number, takeProfit?: number) {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', quantity: number, type: string = 'MARKET', stopLoss?: number, takeProfit?: number, customKey?: string, customSecret?: string) {
+  const apiKey = customKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     throw new Error("Binance Testnet API keys are not configured in .env");
@@ -124,9 +124,9 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
   }
 }
 
-export async function getBinanceBalance() {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+export async function getBinanceBalance(customKey?: string, customSecret?: string) {
+  const apiKey = customKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     return null;
@@ -154,9 +154,9 @@ export async function getBinanceBalance() {
   }
 }
 
-export async function getBinancePositions() {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+export async function getBinancePositions(customKey?: string, customSecret?: string) {
+  const apiKey = customKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     return [];
@@ -192,9 +192,9 @@ export async function getBinancePositions() {
   }
 }
 
-export async function closeBinancePosition(symbol: string) {
-  const apiKey = process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-  const secretKey = process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+export async function closeBinancePosition(symbol: string, customKey?: string, customSecret?: string) {
+  const apiKey = customKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
     throw new Error("Binance Testnet API keys are not configured in .env");
