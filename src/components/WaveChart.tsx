@@ -204,10 +204,17 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
              });
              const levelPrice = p1.value + diff * l;
              try {
-                 line.setData([
-                     { time: p1.time, value: levelPrice },
-                     { time: p2.time, value: levelPrice }
-                 ].sort((a,b) => a.time - b.time));
+                const t1 = p1.time as number;
+                let t2 = p2.time as number;
+                if (t1 === t2) t2 = t1 + 1000;
+                const pData = t1 < t2 ? [
+                    { time: t1, value: levelPrice },
+                    { time: t2, value: levelPrice }
+                ] : [
+                    { time: t2, value: levelPrice },
+                    { time: t1, value: levelPrice }
+                ];
+                line.setData(pData);
              } catch(e) {}
              auxSeries.push(line);
          });
@@ -787,10 +794,15 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                             const t1 = p1.time as number;
                             let t2 = p2.time as number;
                             if (t1 === t2) t2 = t1 + 1000;
-                            auxiliarySeriesRef.current[i].setData([
+                            // Ensure strict ordering
+                            const pData = t1 < t2 ? [
                                 { time: t1, value: levelPrice },
                                 { time: t2, value: levelPrice }
-                            ].sort((a,b) => (a.time as number) - (b.time as number)));
+                            ] : [
+                                { time: t2, value: levelPrice },
+                                { time: t1, value: levelPrice }
+                            ];
+                            auxiliarySeriesRef.current[i].setData(pData);
                         } catch(e) {}
                     }
                 });
@@ -920,10 +932,14 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                              const t1 = p1.time as number;
                              let t2 = p2.time as number;
                              if (t1 === t2) t2 = t1 + 1000;
-                             auxiliarySeriesRef.current[i].setData([
+                             const pData = t1 < t2 ? [
                                  { time: t1, value: levelPrice },
                                  { time: t2, value: levelPrice }
-                             ].sort((a,b) => (a.time as number) - (b.time as number)));
+                             ] : [
+                                 { time: t2, value: levelPrice },
+                                 { time: t1, value: levelPrice }
+                             ];
+                             auxiliarySeriesRef.current[i].setData(pData);
                          } catch(e) {}
                      }
                  });

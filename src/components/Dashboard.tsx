@@ -1112,7 +1112,7 @@ plot(close)"
                          <div className="flex-1">
                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Live Binance Positions</div>
                            {livePositions.length === 0 ? (
-                             <div className="text-sm text-[#787b86] italic py-2">No active positions on Binance.</div>
+                             <div className="text-sm text-[#787b86] italic py-2">No active positions.</div>
                            ) : (
                              <div className="flex flex-col gap-2">
                                {livePositions.map((pos: any, idx) => (
@@ -1122,9 +1122,12 @@ plot(close)"
                                      className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors"
                                   >
                                      <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="font-bold text-white text-sm">
-                                            <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold text-white text-sm">
+                                              <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
+                                          </span>
+                                          {pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
+                                        </div>
                                         <span className={`text-xs font-bold ${pos.unRealizedProfit > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
                                           ${pos.unRealizedProfit.toFixed(2)}
                                         </span>

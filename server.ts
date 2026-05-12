@@ -581,6 +581,30 @@ async function startServer() {
          const secretKey = user?.binanceSecretKey;
          balance = await getBinanceBalance(apiKey, secretKey) || 0;
          livePositions = await getBinancePositions(apiKey, secretKey) || [];
+         
+         const userPaperTrades = await UserTrade.find({ userId: req.user._id, status: 'live', binanceOrderId: /^paper_/ });
+         for (const pt of userPaperTrades) {
+             try {
+                const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${pt.symbol}`);
+                const currentPrice = parseFloat(tickRes.data.price);
+                let pnlNum = 0;
+                if (pt.side === 'BUY') {
+                    pnlNum = (currentPrice - pt.entry) / pt.entry * pt.amount * 10; // assuming 10x
+                } else {
+                    pnlNum = (pt.entry - currentPrice) / pt.entry * pt.amount * 10;
+                }
+                livePositions.push({
+                   symbol: pt.symbol,
+                   amount: pt.amount,
+                   side: pt.side,
+                   entryPrice: pt.entry,
+                   unRealizedProfit: pnlNum,
+                   leverage: 10,
+                   markPrice: currentPrice,
+                   binanceOrderId: pt.binanceOrderId
+                });
+             } catch(e) {}
+         }
       } catch(e) { }
 
       const pending = await Promise.all(pendingTrades.map(async (trade: any) => {
@@ -648,43 +672,44 @@ async function startServer() {
     const apiKey = user?.binanceApiKey || process.env.BINANCE_API_KEY;
     const apiSecret = user?.binanceSecretKey || process.env.BINANCE_SECRET_KEY;
 
-    if (!apiKey || !apiSecret) {
-      return res.status(500).json({ error: 'Binance API keys are missing. Configure them in wallet settings.' });
-    }
-    
     const { symbol, side, amount, leverage, takeProfit, stopLoss } = req.body;
-    // Support Binance Testnet for demo accounts
-    const isTestnet = process.env.BINANCE_TESTNET !== 'false';
-    const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
-    const recvWindow = 5000;
-
-    const getSignature = (queryString: string) => crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
+    let orderTrackingId = '';
+    let executedPrice = 0;
 
     try {
-      if (leverage) {
-        const levQuery = `symbol=${symbol}&leverage=${leverage}&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-        await axios.post(`${baseEndpoint}/fapi/v1/leverage?${levQuery}&signature=${getSignature(levQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }});
-      }
-      
-      const qty = parseFloat(amount || '0');
-      const orderQuery = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${qty}&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-      const orderRes = await axios.post(`${baseEndpoint}/fapi/v1/order?${orderQuery}&signature=${getSignature(orderQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }});
+        const { placeBinanceTrade, setBinanceLeverage } = await import('./binanceService.js');
+        if (leverage) {
+            await setBinanceLeverage(symbol, parseInt(leverage), apiKey, apiSecret);
+        }
+        
+        const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+        executedPrice = parseFloat(tickRes.data.price);
+        const qty = parseFloat(amount) / executedPrice * parseFloat(leverage || '1');
+        
+        try {
+            const apiRes = await placeBinanceTrade(symbol, side, qty, 'MARKET', stopLoss ? parseFloat(stopLoss) : undefined, takeProfit ? parseFloat(takeProfit) : undefined, apiKey, apiSecret);
+            orderTrackingId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+        } catch(e: any) {
+            console.warn(`[Binance] Manual trade failed, falling back to Paper:`, e.message);
+            orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        }
+        
+        const newTrade = await UserTrade.create({
+          userId: req.user._id,
+          symbol,
+          side,
+          amount: parseFloat(amount),
+          entry: executedPrice,
+          target: takeProfit ? parseFloat(takeProfit) : undefined,
+          stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
+          binanceOrderId: orderTrackingId,
+          status: 'live'
+        });
 
-      if (takeProfit) {
-        const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
-        const tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${takeProfit}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-        await axios.post(`${baseEndpoint}/fapi/v1/order?${tpQuery}&signature=${getSignature(tpQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }}).catch(e => console.error('Manual TP Failed:', e.response?.data?.msg));
-      }
-      if (stopLoss) {
-        const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-        const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${stopLoss}&closePosition=true&timestamp=${Date.now()}&recvWindow=${recvWindow}`;
-        await axios.post(`${baseEndpoint}/fapi/v1/order?${slQuery}&signature=${getSignature(slQuery)}`, null, { headers: { 'X-MBX-APIKEY': apiKey }}).catch(e => console.error('Manual SL Failed:', e.response?.data?.msg));
-      }
-      
-      res.json({ success: true, message: 'Trade executed successfully on Binance via API', data: orderRes.data });
+        res.json({ success: true, message: `Trade executed!${orderTrackingId.startsWith('paper') ? ' (Paper)' : ''}`, tradeId: newTrade._id });
     } catch (err: any) {
-      console.error('Binance API Error:', err.response?.data || err.message);
-      res.status(500).json({ error: err.response?.data?.msg || err.message });
+        console.error('Binance API Error:', err.response?.data || err.message);
+        res.status(500).json({ error: err.response?.data?.msg || err.message });
     }
   });
 
@@ -694,6 +719,14 @@ async function startServer() {
     }
     const { symbol, tp, sl, positionSide } = req.body;
     try {
+       const userPaperTrade = await UserTrade.findOne({ userId: req.user._id, symbol, status: 'live', binanceOrderId: /^paper_/ });
+       if (userPaperTrade) {
+           if (tp) userPaperTrade.target = parseFloat(tp);
+           if (sl) userPaperTrade.stopLoss = parseFloat(sl);
+           await userPaperTrade.save();
+           return res.json({ success: true, message: 'Paper TP / SL updated' });
+       }
+
        const user = await User.findById(req.user._id);
        const apiKey = user?.binanceApiKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
        const secretKey = user?.binanceSecretKey || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
@@ -731,9 +764,18 @@ async function startServer() {
      }
      const { symbol } = req.body;
      try {
+       const userPaperTrade = await UserTrade.findOne({ userId: req.user._id, symbol, status: 'live', binanceOrderId: /^paper_/ });
+       if (userPaperTrade) {
+           userPaperTrade.status = 'closed';
+           userPaperTrade.resolvedAt = new Date();
+           await userPaperTrade.save();
+           return res.json({ success: true, message: 'Closed Paper position' });
+       }
+
        const user = await User.findById(req.user._id);
        const apiKey = user?.binanceApiKey;
        const secretKey = user?.binanceSecretKey;
+       const { closeBinancePosition } = await import('./binanceService.js');
        const result = await closeBinancePosition(symbol, apiKey, secretKey);
        res.json(result);
      } catch(e: any) {
