@@ -571,7 +571,13 @@ async function startServer() {
          return res.json({ pending: [], closed: [], livePositions: [] });
       }
       const pendingTrades = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
-      const closed = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
+      const closedSignals = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
+      const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed' }).sort({ resolvedAt: -1 }).limit(20);
+      
+      const closed = [
+         ...closedSignals.map(sig => ({ ...sig.toObject(), type: 'auto' })),
+         ...closedUserTrades.map(ut => ({ ...ut.toObject(), type: 'manual', trend: ut.side === 'BUY' ? 'bullish' : 'bearish', pnlPercent: (ut.realizedPnl / (ut.amount * 10)) * 100 }))
+      ].sort((a: any, b: any) => (new Date(b.resolvedAt || b.timestamp).getTime() - new Date(a.resolvedAt || a.timestamp).getTime())).slice(0, 50);
       
       let balance = 0;
       let livePositions: any[] = [];
@@ -601,7 +607,9 @@ async function startServer() {
                    unRealizedProfit: pnlNum,
                    leverage: 10,
                    markPrice: currentPrice,
-                   binanceOrderId: pt.binanceOrderId
+                   binanceOrderId: pt.binanceOrderId,
+                   target: pt.target,
+                   stopLoss: pt.stopLoss
                 });
              } catch(e) {}
          }
@@ -766,10 +774,22 @@ async function startServer() {
      try {
        const userPaperTrade = await UserTrade.findOne({ userId: req.user._id, symbol, status: 'live', binanceOrderId: /^paper_/ });
        if (userPaperTrade) {
+           let realizedPnl = 0;
+           try {
+               const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+               const currentPrice = parseFloat(tickRes.data.price);
+               if (userPaperTrade.side === 'BUY') {
+                   realizedPnl = (currentPrice - userPaperTrade.entry) / userPaperTrade.entry * userPaperTrade.amount * 10;
+               } else {
+                   realizedPnl = (userPaperTrade.entry - currentPrice) / userPaperTrade.entry * userPaperTrade.amount * 10;
+               }
+           } catch(e) {}
+           
            userPaperTrade.status = 'closed';
            userPaperTrade.resolvedAt = new Date();
+           userPaperTrade.realizedPnl = realizedPnl;
            await userPaperTrade.save();
-           return res.json({ success: true, message: 'Closed Paper position' });
+           return res.json({ success: true, message: `Closed Paper position. Realized PnL: $${realizedPnl.toFixed(2)}` });
        }
 
        const user = await User.findById(req.user._id);
@@ -1351,6 +1371,43 @@ async function startServer() {
                     console.log(`[ML-Evaluator] Evaluated trade ${signal.symbol}: ${outcome.toUpperCase()} (${(pnl * leverage).toFixed(2)}% | $${(signal.realizedPnl || 0).toFixed(2)}) | New Budget: $${engineCfg?.autoBotBalance?.toFixed(2)}`);
                 }
              } catch(e) { }
+         }
+         
+         // Evaluate active User Paper Trades
+         const liveUserPaperTrades = await UserTrade.find({ status: 'live', binanceOrderId: /^paper_/ });
+         for (const ut of liveUserPaperTrades) {
+             try {
+                 const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${ut.symbol}`);
+                 const price = parseFloat(response.data.price);
+                 let outcome = 'live';
+                 let realizedPnl = 0;
+                 
+                 if (ut.side === 'BUY') {
+                     if (ut.target && price >= ut.target) {
+                         outcome = 'win';
+                         realizedPnl = (ut.target - ut.entry) / ut.entry * ut.amount * 10;
+                     } else if (ut.stopLoss && price <= ut.stopLoss) {
+                         outcome = 'loss';
+                         realizedPnl = (ut.stopLoss - ut.entry) / ut.entry * ut.amount * 10;
+                     }
+                 } else if (ut.side === 'SELL') {
+                     if (ut.target && price <= ut.target) {
+                         outcome = 'win';
+                         realizedPnl = (ut.entry - ut.target) / ut.entry * ut.amount * 10;
+                     } else if (ut.stopLoss && price >= ut.stopLoss) {
+                         outcome = 'loss';
+                         realizedPnl = (ut.entry - ut.stopLoss) / ut.entry * ut.amount * 10;
+                     }
+                 }
+                 
+                 if (outcome !== 'live') {
+                     ut.status = 'closed';
+                     ut.realizedPnl = realizedPnl;
+                     ut.resolvedAt = new Date();
+                     await ut.save();
+                     console.log(`[User-Paper] Auto-closed ${ut.side} ${ut.symbol} for user ${ut.userId}: ${outcome.toUpperCase()} ($${realizedPnl.toFixed(2)})`);
+                 }
+             } catch(e) {}
          }
          
          // ML Recalibration: Re-average winning params

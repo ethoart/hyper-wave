@@ -913,8 +913,8 @@ plot(close)"
                   const activeLivePosition = livePositions.find((p: any) => p.symbol === symbol);
 
                   const renderEntry = activeLivePosition?.entryPrice || activeAutoTrade?.entry || activeAnalysis?.entryPoint;
-                  const renderExit = activeAutoTrade?.target || activeAnalysis?.exitPoint;
-                  const renderSL = activeAutoTrade?.stopLoss || activeAnalysis?.stopLoss;
+                  const renderExit = activeLivePosition?.target || activeAutoTrade?.target || activeAnalysis?.exitPoint;
+                  const renderSL = activeLivePosition?.stopLoss || activeAutoTrade?.stopLoss || activeAnalysis?.stopLoss;
                   const renderTrend = activeLivePosition ? (activeLivePosition.side === 'BUY' ? 'bullish' : 'bearish') : activeAutoTrade?.trend || activeAnalysis?.trend;
 
                   return (
