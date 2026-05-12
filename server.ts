@@ -286,6 +286,35 @@ async function startServer() {
     });
   });
 
+  app.get('/api/admin/fix-trades', async (req, res) => {
+      try {
+        const UserTrade = mongoose.models.UserTrade;
+        const trades = await UserTrade.find({ status: 'live' });
+        let fixed = 0;
+        for (const t of trades) {
+            const entry = t.entry || t.entryPrice;
+            const target = t.target || t.takeProfit;
+            let changed = false;
+            if (entry && target) {
+                if (t.side === 'BUY' && target < entry) {
+                    t.side = 'SELL';
+                    changed = true;
+                } else if (t.side === 'SELL' && target > entry) {
+                    t.side = 'BUY';
+                    changed = true;
+                }
+            }
+            if (changed) {
+                await t.save();
+                fixed++;
+            }
+        }
+        res.json({ success: true, fixed });
+      } catch(e) {
+          res.status(500).json({ error: e.message });
+      }
+  });
+
   // User Management
   app.get('/api/users', authMiddleware, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
@@ -1060,9 +1089,7 @@ async function startServer() {
                 const evalProUsers = await (User as any).find({ 
                    role: { $in: ['pro', 'admin'] }, 
                    useCustomAlgo: true, 
-                   pineCode: { $exists: true, $ne: '' },
-                   binanceApiKey: { $exists: true, $ne: '' },
-                   binanceSecretKey: { $exists: true, $ne: '' }
+                   pineCode: { $exists: true, $ne: '' }
                 });
                 for (const pUser of evalProUsers) {
                    try {
@@ -1304,9 +1331,7 @@ async function startServer() {
                                  await signal.save();
                                  
                                  const proUsers = await (User as any).find({ 
-                                     role: { $in: ['pro', 'admin'] }, 
-                                     binanceApiKey: { $exists: true, $ne: '' },
-                                     binanceSecretKey: { $exists: true, $ne: '' }
+                                     role: { $in: ['pro', 'admin'] }
                                  });
                                  for (const pUser of proUsers) {
                                      try {

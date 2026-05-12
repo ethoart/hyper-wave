@@ -793,19 +793,18 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                     const levelPrice = p1.value + diff * l;
                     if (auxiliarySeriesRef.current[i]) {
                         try {
-                            const t1 = p1.time as number;
-                            let t2 = p2.time as number;
-                            if (t1 === t2) t2 = t1 + 1000;
-                            // Ensure strict ordering
-                            const pData = getNumericTime(t1) < getNumericTime(t2) ? [
-                                { time: t1 as any, value: levelPrice },
-                                { time: t2 as any, value: levelPrice }
-                            ] : [
-                                { time: t2 as any, value: levelPrice },
-                                { time: t1 as any, value: levelPrice }
-                            ];
-                            auxiliarySeriesRef.current[i].setData(pData);
-                        } catch(e) {}
+    const nt1 = getNumericTime(p1.time);
+    const nt2 = getNumericTime(p2.time);
+    if (nt1 === nt2) return;
+    const pData = nt1 < nt2 ? [
+        { time: p1.time as any, value: levelPrice },
+        { time: p2.time as any, value: levelPrice }
+    ] : [
+        { time: p2.time as any, value: levelPrice },
+        { time: p1.time as any, value: levelPrice }
+    ];
+    auxiliarySeriesRef.current[i].setData(pData);
+} catch(e) {}
                     }
                 });
              } else if (activeTool === 'rectangle' && userDrawings.current.length === 2) {
@@ -931,18 +930,18 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                      const levelPrice = p1.value + diff * l;
                      if (auxiliarySeriesRef.current[i]) {
                          try {
-                             const t1 = p1.time as number;
-                             let t2 = p2.time as number;
-                             if (t1 === t2) t2 = t1 + 1000;
-                             const pData = getNumericTime(t1) < getNumericTime(t2) ? [
-                                 { time: t1 as any, value: levelPrice },
-                                 { time: t2 as any, value: levelPrice }
-                             ] : [
-                                 { time: t2 as any, value: levelPrice },
-                                 { time: t1 as any, value: levelPrice }
-                             ];
-                             auxiliarySeriesRef.current[i].setData(pData);
-                         } catch(e) {}
+    const nt1 = getNumericTime(p1.time);
+    const nt2 = getNumericTime(p2.time);
+    if (nt1 === nt2) return;
+    const pData = nt1 < nt2 ? [
+        { time: p1.time as any, value: levelPrice },
+        { time: p2.time as any, value: levelPrice }
+    ] : [
+        { time: p2.time as any, value: levelPrice },
+        { time: p1.time as any, value: levelPrice }
+    ];
+    auxiliarySeriesRef.current[i].setData(pData);
+} catch(e) {}
                      }
                  });
                  
