@@ -575,7 +575,12 @@ async function startServer() {
       const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed' }).sort({ resolvedAt: -1 }).limit(20);
       
       const closed = [
-         ...closedSignals.map(sig => ({ ...sig.toObject(), type: 'auto' })),
+         ...closedSignals.map(sig => ({ 
+             ...sig.toObject(), 
+             type: 'auto', 
+             realizedPnl: sig.pnl ? (sig.amount * 10 * sig.pnl / 100) : 0,
+             pnlPercent: sig.pnl ? (sig.pnl * 10) : 0
+         })),
          ...closedUserTrades.map(ut => ({ ...ut.toObject(), type: 'manual', trend: ut.side === 'BUY' ? 'bullish' : 'bearish', pnlPercent: (ut.realizedPnl / (ut.amount * 10)) * 100 }))
       ].sort((a: any, b: any) => (new Date(b.resolvedAt || b.timestamp).getTime() - new Date(a.resolvedAt || a.timestamp).getTime())).slice(0, 50);
       
@@ -1065,8 +1070,9 @@ async function startServer() {
                       if (result && result.trend && result.entry && result.target && result.stopLoss) {
                          const side = result.trend === 'bullish' ? 'BUY' : 'SELL';
                          const leverage = 10;
+                         const currentPrice = parseFloat(pair.lastPrice);
                          const positionSizeUsdt = (result.amount || 10) * leverage;
-                         const quantity = +(positionSizeUsdt / result.entry).toFixed(4);
+                         const quantity = +(positionSizeUsdt / currentPrice).toFixed(4);
                          try { await setBinanceLeverage(pair.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
                          let orderTrackingId = '';
                          try {
@@ -1081,7 +1087,7 @@ async function startServer() {
                             symbol: pair.symbol,
                             side: side,
                             amount: result.amount || 10,
-                            entry: result.entry,
+                            entry: currentPrice,
                             target: result.target,
                             stopLoss: result.stopLoss,
                             binanceOrderId: orderTrackingId,
@@ -1226,43 +1232,7 @@ async function startServer() {
                            setupData: { reasoning: alert.reasoning, params: alert }
                        });
 
-                       const proUsers = await (User as any).find({ 
-                           role: { $in: ['pro', 'admin'] }, 
-                           binanceApiKey: { $exists: true, $ne: '' },
-                           binanceSecretKey: { $exists: true, $ne: '' }
-                       });
-                       for (const pUser of proUsers) {
-                           try {
-                              if (!pUser.useCustomAlgo) {
-                                 const side = alert.trend === 'bullish' ? 'BUY' : 'SELL';
-                                 const leverage = 10;
-                                 const positionSizeUsdt = tradeAmountDollars * leverage;
-                                 const quantity = +(positionSizeUsdt / alert.entry).toFixed(4);
-                                 try { await setBinanceLeverage(alert.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
-                                 let orderTrackingId = '';
-                                 try {
-                                     const res = await placeBinanceTrade(alert.symbol, side, quantity, 'MARKET', activeSl, alert.target, pUser.binanceApiKey, pUser.binanceSecretKey);
-                                     orderTrackingId = res.orderId?.toString() || res.clientOrderId?.toString() || 'unknown';
-                                 } catch(e: any) {
-                                     console.warn(`[Binance] PRO Default Algo failed, falling back to Paper:`, e.message);
-                                     orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-                                 }
-                                 await UserTrade.create({
-                                    userId: pUser._id,
-                                    symbol: alert.symbol,
-                                    side: side,
-                                    amount: tradeAmountDollars,
-                                    entry: alert.entry,
-                                    target: alert.target,
-                                    stopLoss: activeSl,
-                                    binanceOrderId: orderTrackingId,
-                                    status: 'live'
-                                  });
-                              }
-                           } catch(err) {
-                              console.error('Failed to place user trade', err);
-                           }
-                       }
+
                    }
                } catch(e) { /* ignore */ }
             }
@@ -1327,6 +1297,42 @@ async function startServer() {
                                  signal.binanceOrderId = orderId;
                                  signal.quantityExecuted = quantity;
                                  await signal.save();
+                                 
+                                 const proUsers = await (User as any).find({ 
+                                     role: { $in: ['pro', 'admin'] }, 
+                                     binanceApiKey: { $exists: true, $ne: '' },
+                                     binanceSecretKey: { $exists: true, $ne: '' }
+                                 });
+                                 for (const pUser of proUsers) {
+                                     try {
+                                        if (!pUser.useCustomAlgo) {
+                                           const userPosSizeUsdt = tradeAmountDollars * leverage;
+                                           const userQuantity = +(userPosSizeUsdt / price).toFixed(4);
+                                           try { await setBinanceLeverage(signal.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
+                                           let orderTrackingId = '';
+                                           try {
+                                               const res = await placeBinanceTrade(signal.symbol, side, userQuantity, 'MARKET', signal.stopLoss, signal.target, pUser.binanceApiKey, pUser.binanceSecretKey);
+                                               orderTrackingId = res.orderId?.toString() || res.clientOrderId?.toString() || 'unknown';
+                                           } catch(e: any) {
+                                               console.warn(`[Binance] PRO Default Algo failed, falling back to Paper:`, e.message);
+                                               orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+                                           }
+                                           await UserTrade.create({
+                                              userId: pUser._id,
+                                              symbol: signal.symbol,
+                                              side: side,
+                                              amount: tradeAmountDollars,
+                                              entry: price,
+                                              target: signal.target,
+                                              stopLoss: signal.stopLoss,
+                                              binanceOrderId: orderTrackingId,
+                                              status: 'live'
+                                            });
+                                        }
+                                     } catch(err) {
+                                        console.error('Failed to place user trade', err);
+                                     }
+                                 }
                              } catch(e: any) {
                                   console.error(`[Entry Error] ${signal.symbol}:`, e.message);
                              }
