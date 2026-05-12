@@ -208,11 +208,11 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 let t2 = p2.time as number;
                 if (t1 === t2) t2 = t1 + 1000;
                 const pData = t1 < t2 ? [
-                    { time: t1, value: levelPrice },
-                    { time: t2, value: levelPrice }
+                    { time: t1 as any, value: levelPrice },
+                    { time: t2 as any, value: levelPrice }
                 ] : [
-                    { time: t2, value: levelPrice },
-                    { time: t1, value: levelPrice }
+                    { time: t2 as any, value: levelPrice },
+                    { time: t1 as any, value: levelPrice }
                 ];
                 line.setData(pData);
              } catch(e) {}
@@ -796,11 +796,11 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                             if (t1 === t2) t2 = t1 + 1000;
                             // Ensure strict ordering
                             const pData = t1 < t2 ? [
-                                { time: t1, value: levelPrice },
-                                { time: t2, value: levelPrice }
+                                { time: t1 as any, value: levelPrice },
+                                { time: t2 as any, value: levelPrice }
                             ] : [
-                                { time: t2, value: levelPrice },
-                                { time: t1, value: levelPrice }
+                                { time: t2 as any, value: levelPrice },
+                                { time: t1 as any, value: levelPrice }
                             ];
                             auxiliarySeriesRef.current[i].setData(pData);
                         } catch(e) {}
@@ -933,11 +933,11 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                              let t2 = p2.time as number;
                              if (t1 === t2) t2 = t1 + 1000;
                              const pData = t1 < t2 ? [
-                                 { time: t1, value: levelPrice },
-                                 { time: t2, value: levelPrice }
+                                 { time: t1 as any, value: levelPrice },
+                                 { time: t2 as any, value: levelPrice }
                              ] : [
-                                 { time: t2, value: levelPrice },
-                                 { time: t1, value: levelPrice }
+                                 { time: t2 as any, value: levelPrice },
+                                 { time: t1 as any, value: levelPrice }
                              ];
                              auxiliarySeriesRef.current[i].setData(pData);
                          } catch(e) {}
