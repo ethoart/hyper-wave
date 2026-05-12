@@ -197,11 +197,19 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
          const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
          const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
          levels.forEach((l, i) => {
-             const pl = candleSeries.createPriceLine({
-                 price: p1.value + diff * l, color: colors[i] || shape.color,
-                 lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: `Fib ${l}`
+             const line = chart.addSeries(LineSeries, {
+                 color: colors[i] || shape.color,
+                 lineWidth: 1, lineStyle: 2,
+                 crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
              });
-             pLines.push(pl);
+             const levelPrice = p1.value + diff * l;
+             try {
+                 line.setData([
+                     { time: p1.time, value: levelPrice },
+                     { time: p2.time, value: levelPrice }
+                 ].sort((a,b) => a.time - b.time));
+             } catch(e) {}
+             auxSeries.push(line);
          });
      } else if (shape.tool === 'rectangle' && shape.points.length === 2) {
          const p1 = shape.points[0]; const p2 = shape.points[1];
@@ -761,29 +769,28 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
                 const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
                 
-                if (targetPriceLinesRef.current.length === 0) {
+                if (auxiliarySeriesRef.current.length === 0) {
                     levels.forEach((l, i) => {
-                        const levelPrice = p1.value + diff * l;
-                        if (candlestickSeriesRef.current) {
-                            const pl = candlestickSeriesRef.current.createPriceLine({
-                                price: levelPrice,
-                                color: colors[i] || drawingColor,
-                                lineWidth: 1,
-                                lineStyle: 2,
-                                axisLabelVisible: true,
-                                title: `Fib ${l}`
-                            });
-                            targetPriceLinesRef.current.push(pl);
-                        }
-                    });
-                } else {
-                    levels.forEach((l, i) => {
-                        const levelPrice = p1.value + diff * l;
-                        if (targetPriceLinesRef.current[i]) {
-                            try { targetPriceLinesRef.current[i].applyOptions({ price: levelPrice }); } catch(e) {}
-                        }
+                        const line = chart.addSeries(LineSeries, {
+                            color: colors[i] || drawingColor,
+                            lineWidth: 1, lineStyle: 2,
+                            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
+                        });
+                        auxiliarySeriesRef.current.push(line);
                     });
                 }
+                
+                levels.forEach((l, i) => {
+                    const levelPrice = p1.value + diff * l;
+                    if (auxiliarySeriesRef.current[i]) {
+                        try {
+                            auxiliarySeriesRef.current[i].setData([
+                                { time: p1.time, value: levelPrice },
+                                { time: p2.time, value: levelPrice }
+                            ].sort((a,b) => a.time - b.time));
+                        } catch(e) {}
+                    }
+                });
              } else if (activeTool === 'rectangle' && userDrawings.current.length === 2) {
                 const p1 = userDrawings.current[0];
                 const p2 = userDrawings.current[1];
@@ -892,29 +899,29 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
                  const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
                  
-                 if (targetPriceLinesRef.current.length === 0) {
+                 if (auxiliarySeriesRef.current.length === 0) {
                      levels.forEach((l, i) => {
-                         const levelPrice = p1.value + diff * l;
-                         if (candlestickSeriesRef.current) {
-                             const pl = candlestickSeriesRef.current.createPriceLine({
-                                 price: levelPrice,
-                                 color: colors[i] || drawingColor,
-                                 lineWidth: 1,
-                                 lineStyle: 2,
-                                 axisLabelVisible: true,
-                                 title: `Fib ${l}`
-                             });
-                             targetPriceLinesRef.current.push(pl);
-                         }
-                     });
-                 } else {
-                     levels.forEach((l, i) => {
-                         const levelPrice = p1.value + diff * l;
-                         if (targetPriceLinesRef.current[i]) {
-                             try { targetPriceLinesRef.current[i].applyOptions({ price: levelPrice }); } catch(e) {}
-                         }
+                         const line = chart.addSeries(LineSeries, {
+                             color: colors[i] || drawingColor,
+                             lineWidth: 1, lineStyle: 2,
+                             crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
+                         });
+                         auxiliarySeriesRef.current.push(line);
                      });
                  }
+                 
+                 levels.forEach((l, i) => {
+                     const levelPrice = p1.value + diff * l;
+                     if (auxiliarySeriesRef.current[i]) {
+                         try {
+                             auxiliarySeriesRef.current[i].setData([
+                                 { time: p1.time, value: levelPrice },
+                                 { time: p2.time, value: levelPrice }
+                             ].sort((a,b) => a.time - b.time));
+                         } catch(e) {}
+                     }
+                 });
+                 
               } else if (activeTool !== 'rectangle') {
                  try { userSeriesRef.current.setData(pts as any[]); } catch(e) {}
               }
