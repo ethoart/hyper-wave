@@ -570,7 +570,7 @@ async function startServer() {
       if (!isDbConnected) {
          return res.json({ pending: [], closed: [], livePositions: [] });
       }
-      const pending = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
+      const pendingTrades = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
       const closed = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
       
       let balance = 0;
@@ -582,6 +582,27 @@ async function startServer() {
          balance = await getBinanceBalance(apiKey, secretKey) || 0;
          livePositions = await getBinancePositions(apiKey, secretKey) || [];
       } catch(e) { }
+
+      const pending = await Promise.all(pendingTrades.map(async (trade: any) => {
+          let t = trade.toObject();
+          if (t.binanceOrderId) {
+              try {
+                  const tickerRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${t.symbol}`);
+                  const currentPrice = parseFloat(tickerRes.data.price);
+                  t.currentPrice = currentPrice;
+                  
+                  let pnlPct = 0;
+                  if (t.trend === 'bullish') {
+                      pnlPct = (currentPrice - t.entry) / t.entry * 100;
+                  } else {
+                      pnlPct = (t.entry - currentPrice) / t.entry * 100;
+                  }
+                  t.unrealizedPnlPct = pnlPct * 10; // 10x leverage
+                  t.unrealizedPnl = (t.amount || 10) * 10 * (pnlPct / 100);
+              } catch(err) {}
+          }
+          return t;
+      }));
 
       let engineCfg = await EngineConfig.findOne({ id: 'global' });
       let autoBotBalance = engineCfg?.autoBotBalance || 100;
@@ -967,39 +988,41 @@ async function startServer() {
       for (const pair of topPairs) {
          try {
             // PRO User Custom Algos
-            const evalProUsers = await (User as any).find({ 
-               role: { $in: ['pro', 'admin'] }, 
-               useCustomAlgo: true, 
-               pineCode: { $exists: true, $ne: '' },
-               binanceApiKey: { $exists: true, $ne: '' },
-               binanceSecretKey: { $exists: true, $ne: '' }
-            });
-            for (const pUser of evalProUsers) {
-               try {
-                  const customFunc = new Function('pair', 'price', pUser.pineCode);
-                  const result = customFunc(pair, parseFloat(pair.lastPrice));
-                  if (result && result.trend && result.entry && result.target && result.stopLoss) {
-                     const side = result.trend === 'bullish' ? 'BUY' : 'SELL';
-                     const leverage = 10;
-                     const positionSizeUsdt = (result.amount || 10) * leverage;
-                     const quantity = +(positionSizeUsdt / result.entry).toFixed(4);
-                     try { await setBinanceLeverage(pair.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
-                     const res = await placeBinanceTrade(pair.symbol, side, quantity, 'MARKET', result.stopLoss, result.target, pUser.binanceApiKey, pUser.binanceSecretKey);
-                     await UserTrade.create({
-                        userId: pUser._id,
-                        symbol: pair.symbol,
-                        side: side,
-                        amount: result.amount || 10,
-                        entry: result.entry,
-                        target: result.target,
-                        stopLoss: result.stopLoss,
-                        binanceOrderId: res.orderId?.toString() || 'unknown',
-                        status: 'live'
-                     });
-                  }
-               } catch(err) {
-                 // Ignore individual user script errors
-               }
+            if (isDbConnected) {
+                const evalProUsers = await (User as any).find({ 
+                   role: { $in: ['pro', 'admin'] }, 
+                   useCustomAlgo: true, 
+                   pineCode: { $exists: true, $ne: '' },
+                   binanceApiKey: { $exists: true, $ne: '' },
+                   binanceSecretKey: { $exists: true, $ne: '' }
+                });
+                for (const pUser of evalProUsers) {
+                   try {
+                      const customFunc = new Function('pair', 'price', pUser.pineCode);
+                      const result = customFunc(pair, parseFloat(pair.lastPrice));
+                      if (result && result.trend && result.entry && result.target && result.stopLoss) {
+                         const side = result.trend === 'bullish' ? 'BUY' : 'SELL';
+                         const leverage = 10;
+                         const positionSizeUsdt = (result.amount || 10) * leverage;
+                         const quantity = +(positionSizeUsdt / result.entry).toFixed(4);
+                         try { await setBinanceLeverage(pair.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
+                         const res = await placeBinanceTrade(pair.symbol, side, quantity, 'MARKET', result.stopLoss, result.target, pUser.binanceApiKey, pUser.binanceSecretKey);
+                         await UserTrade.create({
+                            userId: pUser._id,
+                            symbol: pair.symbol,
+                            side: side,
+                            amount: result.amount || 10,
+                            entry: result.entry,
+                            target: result.target,
+                            stopLoss: result.stopLoss,
+                            binanceOrderId: res.orderId?.toString() || 'unknown',
+                            status: 'live'
+                         });
+                      }
+                   } catch(err) {
+                     // Ignore individual user script errors
+                   }
+                }
             }
 
            const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=1h&limit=200`);

@@ -908,23 +908,35 @@ plot(close)"
                     {liveCandle && <span className="ml-2 font-mono text-[#d1d4dc]">{liveCandle.close}</span>}
                   </div>
                 </div>
-                <WaveChart 
-                   symbol={symbol}
-                   interval={interval}
-                   data={chartData} 
-                   liveCandle={liveCandle}
-                   entryPoint={activeAnalysis?.entryPoint} 
-                   exitPoint={activeAnalysis?.exitPoint} 
-                   stopLoss={activeAnalysis?.stopLoss} 
-                   wavePoints={activeAnalysis?.wavePoints}
-                   channelPoints={activeAnalysis?.channelPoints}
-                   flagPoints={activeAnalysis?.flagPoints}
-                   trend={activeAnalysis?.trend}
-                   activeTool={activeTool}
-                   drawingColor={drawingColor}
-                   clearDrawings={clearDrawings}
-                   onToolDone={() => setActiveTool('crosshair')}
-                />
+                {(() => {
+                  const activeAutoTrade = openTrades.find((t: any) => t.symbol === symbol && t.binanceOrderId);
+                  const activeLivePosition = livePositions.find((p: any) => p.symbol === symbol);
+
+                  const renderEntry = activeLivePosition?.entryPrice || activeAutoTrade?.entry || activeAnalysis?.entryPoint;
+                  const renderExit = activeAutoTrade?.target || activeAnalysis?.exitPoint;
+                  const renderSL = activeAutoTrade?.stopLoss || activeAnalysis?.stopLoss;
+                  const renderTrend = activeLivePosition ? (activeLivePosition.side === 'BUY' ? 'bullish' : 'bearish') : activeAutoTrade?.trend || activeAnalysis?.trend;
+
+                  return (
+                    <WaveChart 
+                       symbol={symbol}
+                       interval={interval}
+                       data={chartData} 
+                       liveCandle={liveCandle}
+                       entryPoint={renderEntry} 
+                       exitPoint={renderExit} 
+                       stopLoss={renderSL} 
+                       wavePoints={activeAnalysis?.wavePoints}
+                       channelPoints={activeAnalysis?.channelPoints}
+                       flagPoints={activeAnalysis?.flagPoints}
+                       trend={renderTrend}
+                       activeTool={activeTool}
+                       drawingColor={drawingColor}
+                       clearDrawings={clearDrawings}
+                       onToolDone={() => setActiveTool('crosshair')}
+                    />
+                  );
+                })()}
               </div>
               {additionalCharts.map((c, i) => (
                 <div key={i} className="relative border border-[#2a2e39] flex flex-col min-h-[300px] resize overflow-hidden">
@@ -1177,16 +1189,27 @@ plot(close)"
                                   <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors relative">
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
-                                        <span className="text-xs text-[#787b86]">
-                                          {trade.binanceOrderId ? <span className="text-[#2962ff] font-bold">LIVE</span> : 'Waiting Entry'}
-                                        </span>
+                                        <div className="flex gap-2 items-center">
+                                          {trade.binanceOrderId && trade.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
+                                          <span className="text-xs text-[#787b86]">
+                                            {trade.binanceOrderId ? <span className="text-[#2962ff] font-bold">LIVE</span> : 'Waiting Entry'}
+                                          </span>
+                                        </div>
                                      </div>
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="text-xs text-[#787b86]">Entry: {trade.entry}</span>
                                         <span className="text-xs text-[#089981]">Target: {trade.target}</span>
                                         <span className="text-xs text-[#f23645]">SL: {trade.stopLoss}</span>
                                      </div>
-                                     <div className="text-[10px] text-[#787b86]">Auto Amount: ${trade.amount}</div>
+                                     <div className="flex justify-between items-center w-full mt-1">
+                                       <span className="text-[10px] text-[#787b86]">Amt: ${trade.amount}</span>
+                                       {trade.unrealizedPnl !== undefined && (
+                                           <span className={`text-xs font-bold ${trade.unrealizedPnl >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                                              {trade.unrealizedPnl >= 0 ? '+' : ''}${trade.unrealizedPnl.toFixed(2)} ({trade.unrealizedPnlPct?.toFixed(2)}%)
+                                           </span>
+                                       )}
+                                       {trade.unrealizedPnl === undefined && trade.binanceOrderId && <span className="text-xs text-[#787b86] animate-pulse">Pricing...</span>}
+                                     </div>
                                   </div>
                                ))}
                              </div>
