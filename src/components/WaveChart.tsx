@@ -774,20 +774,30 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
              const diff = p2.value - p1.value;
              const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
              const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
-             levels.forEach((l, i) => {
-                 const levelPrice = p1.value + diff * l;
-                 if (candlestickSeriesRef.current) {
-                     const pl = candlestickSeriesRef.current.createPriceLine({
-                         price: levelPrice,
-                         color: colors[i] || drawingColor,
-                         lineWidth: 1,
-                         lineStyle: 2,
-                         axisLabelVisible: true,
-                         title: `Fib ${l}`
-                     });
-                     targetPriceLinesRef.current.push(pl);
-                 }
-             });
+             
+             if (targetPriceLinesRef.current.length === 0) {
+                 levels.forEach((l, i) => {
+                     const levelPrice = p1.value + diff * l;
+                     if (candlestickSeriesRef.current) {
+                         const pl = candlestickSeriesRef.current.createPriceLine({
+                             price: levelPrice,
+                             color: colors[i] || drawingColor,
+                             lineWidth: 1,
+                             lineStyle: 2,
+                             axisLabelVisible: true,
+                             title: `Fib ${l}`
+                         });
+                         targetPriceLinesRef.current.push(pl);
+                     }
+                 });
+             } else {
+                 levels.forEach((l, i) => {
+                     const levelPrice = p1.value + diff * l;
+                     if (targetPriceLinesRef.current[i]) {
+                         try { targetPriceLinesRef.current[i].applyOptions({ price: levelPrice }); } catch(e) {}
+                     }
+                 });
+             }
           } else if (activeTool === 'rectangle' && userDrawings.current.length === 2) {
              const p1 = userDrawings.current[0];
              const p2 = userDrawings.current[1];
@@ -859,25 +869,29 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
                  const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
                  
-                 targetPriceLinesRef.current.forEach(pl => {
-                     try { candlestickSeriesRef.current?.removePriceLine(pl); } catch(e) {}
-                 });
-                 targetPriceLinesRef.current = [];
-
-                 levels.forEach((l, i) => {
-                     const levelPrice = p1.value + diff * l;
-                     if (candlestickSeriesRef.current) {
-                         const pl = candlestickSeriesRef.current.createPriceLine({
-                             price: levelPrice,
-                             color: colors[i] || drawingColor,
-                             lineWidth: 1,
-                             lineStyle: 2,
-                             axisLabelVisible: true,
-                             title: `Fib ${l}`
-                         });
-                         targetPriceLinesRef.current.push(pl);
-                     }
-                 });
+                 if (targetPriceLinesRef.current.length === 0) {
+                     levels.forEach((l, i) => {
+                         const levelPrice = p1.value + diff * l;
+                         if (candlestickSeriesRef.current) {
+                             const pl = candlestickSeriesRef.current.createPriceLine({
+                                 price: levelPrice,
+                                 color: colors[i] || drawingColor,
+                                 lineWidth: 1,
+                                 lineStyle: 2,
+                                 axisLabelVisible: true,
+                                 title: `Fib ${l}`
+                             });
+                             targetPriceLinesRef.current.push(pl);
+                         }
+                     });
+                 } else {
+                     levels.forEach((l, i) => {
+                         const levelPrice = p1.value + diff * l;
+                         if (targetPriceLinesRef.current[i]) {
+                             try { targetPriceLinesRef.current[i].applyOptions({ price: levelPrice }); } catch(e) {}
+                         }
+                     });
+                 }
               } else if (activeTool !== 'rectangle') {
                  try { userSeriesRef.current.setData(pts as any[]); } catch(e) {}
               }
