@@ -177,17 +177,21 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
      let pLines: any[] = [];
 
      if (shape.tool === 'measure' && shape.points.length === 2) {
-         userSrs.setData(shape.points);
+         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         try { userSrs.setData(sortedPoints); } catch(e) {}
          const p1 = shape.points[0];
          const p2 = shape.points[1];
          const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
-         (userSrs as any).setMarkers([{
-             time: p2.time, position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
-             color: pct.startsWith('-') ? '#f23645' : '#089981',
-             shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp', text: `${pct}% / ${p2.value.toFixed(2)}`
-         }]);
+         try {
+            (userSrs as any).setMarkers([{
+                time: p2.time, position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+                color: pct.startsWith('-') ? '#f23645' : '#089981',
+                shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp', text: `${pct}% / ${p2.value.toFixed(2)}`
+            }]);
+         } catch(e) {}
      } else if (shape.tool === 'fibonacci' && shape.points.length === 2) {
-         userSrs.setData(shape.points);
+         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         try { userSrs.setData(sortedPoints); } catch(e) {}
          const p1 = shape.points[0]; const p2 = shape.points[1];
          const diff = p2.value - p1.value;
          const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
@@ -203,23 +207,30 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
          const p1 = shape.points[0]; const p2 = shape.points[1];
          const topSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
          const botSrs = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
-         topSrs.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }]);
-         botSrs.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }]);
+         try {
+             topSrs.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+             botSrs.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+         } catch(e) {}
          auxSeries.push(topSrs, botSrs);
-         (userSrs as any).setMarkers([
-            { time: p1.time, position: 'inBar', color: shape.color, shape: 'square', text: '' },
-            { time: p2.time, position: 'inBar', color: shape.color, shape: 'square', text: '' }
-         ]);
+         try {
+            (userSrs as any).setMarkers([
+               { time: p1.time, position: 'inBar', color: shape.color, shape: 'square', text: '' },
+               { time: p2.time, position: 'inBar', color: shape.color, shape: 'square', text: '' }
+            ].sort((a,b) => a.time - b.time));
+         } catch(e) {}
      } else if (shape.tool === 'parallel' && shape.points.length === 3) {
          const p1 = shape.points[0]; const p2 = shape.points[1]; const p3 = shape.points[2];
          const slope = (p2.value - p1.value) / (p2.time - p1.time);
          const newIntercept = p3.value - slope * p3.time;
          const parLine = chart.addSeries(LineSeries, { color: shape.color, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
-         parLine.setData([{ time: p1.time, value: slope * p1.time + newIntercept }, { time: p2.time, value: slope * p2.time + newIntercept }]);
+         try {
+             parLine.setData([{ time: p1.time, value: slope * p1.time + newIntercept }, { time: p2.time, value: slope * p2.time + newIntercept }].sort((a,b) => a.time - b.time));
+         } catch(e) {}
          auxSeries.push(parLine);
-         userSrs.setData([p1, p2]);
+         try { userSrs.setData([p1, p2].sort((a,b) => a.time - b.time)); } catch(e) {}
      } else {
-         userSrs.setData(shape.points); // trend, pen, etc
+         const sortedPoints = [...shape.points].sort((a, b) => a.time - b.time);
+         try { userSrs.setData(sortedPoints); } catch(e) {} // trend, pen, etc
      }
 
      completedShapesRef.current.push({ series: [userSrs, ...auxSeries].filter(Boolean), priceLines: pLines });
@@ -734,13 +745,15 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const p1 = userDrawings.current[0];
                 const p2 = userDrawings.current[1]; // actual second click
                 const pct = ((p2.value - p1.value) / p1.value * 100).toFixed(2);
-                (userSeriesRef.current as any).setMarkers([{
-                    time: p2.time,
-                    position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
-                    color: pct.startsWith('-') ? '#f23645' : '#089981',
-                    shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
-                    text: `${pct}% / ${p2.value.toFixed(2)}`,
-                }]);
+                try {
+                   (userSeriesRef.current as any).setMarkers([{
+                       time: p2.time,
+                       position: pct.startsWith('-') ? 'belowBar' : 'aboveBar',
+                       color: pct.startsWith('-') ? '#f23645' : '#089981',
+                       shape: pct.startsWith('-') ? 'arrowDown' : 'arrowUp',
+                       text: `${pct}% / ${p2.value.toFixed(2)}`,
+                   }]);
+                } catch(e) {}
              } else if (activeTool === 'fibonacci' && userDrawings.current.length === 2) {
                 const p1 = userDrawings.current[0];
                 const p2 = userDrawings.current[1];
@@ -776,14 +789,18 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const p2 = userDrawings.current[1];
                 const topSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
                 const bottomSeries = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
-                topSeries.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }]);
-                bottomSeries.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }]);
+                try {
+                    topSeries.setData([{ time: p1.time, value: Math.max(p1.value, p2.value) }, { time: p2.time, value: Math.max(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+                    bottomSeries.setData([{ time: p1.time, value: Math.min(p1.value, p2.value) }, { time: p2.time, value: Math.min(p1.value, p2.value) }].sort((a,b) => a.time - b.time));
+                } catch(e) {}
                 auxiliarySeriesRef.current.push(topSeries, bottomSeries);
                 
-                (userSeriesRef.current as any).setMarkers([
-                   { time: p1.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
-                   { time: p2.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
-                ]);
+                try {
+                   (userSeriesRef.current as any).setMarkers([
+                      { time: p1.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
+                      { time: p2.time, position: 'inBar', color: drawingColor, shape: 'square', text: '' },
+                   ].sort((a,b) => a.time - b.time));
+                } catch(e) {}
                 try { userSeriesRef.current.setData([]); } catch(e) {}
              } else if (activeTool === 'parallel' && userDrawings.current.length === 3) {
                 const p1 = userDrawings.current[0];
@@ -794,10 +811,12 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const newIntercept = p3.value - slope * p3.time;
                 
                 const parallelLine = chart.addSeries(LineSeries, { color: drawingColor, lineWidth: 2, lineStyle: 0, crosshairMarkerVisible: false });
-                parallelLine.setData([
-                   { time: p1.time, value: slope * p1.time + newIntercept },
-                   { time: p2.time, value: slope * p2.time + newIntercept }
-                ]);
+                try {
+                   parallelLine.setData([
+                      { time: p1.time, value: slope * p1.time + newIntercept },
+                      { time: p2.time, value: slope * p2.time + newIntercept }
+                   ].sort((a,b) => a.time - b.time));
+                } catch(e) {}
                 auxiliarySeriesRef.current.push(parallelLine);
                 
                 try { userSeriesRef.current.setData([p1, p2]); } catch(e) {}
