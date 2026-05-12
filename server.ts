@@ -454,6 +454,26 @@ async function startServer() {
       
       const entryPrice = parseFloat(entry);
       const targetPrice = parseFloat(target);
+      let slPrice = parseFloat(stopLoss);
+      
+      // Calculate current projected loss
+      let rawLossUsdt = 0;
+      if (trend === 'bullish') {
+          rawLossUsdt = (positionSizeUsdt / entryPrice) * (entryPrice - slPrice);
+      } else {
+          rawLossUsdt = (positionSizeUsdt / entryPrice) * (slPrice - entryPrice);
+      }
+
+      // Clamp stop loss so that max loss is exactly $4.00 if it exceeds it or if it's less than $2.00
+      if (rawLossUsdt > 5 || rawLossUsdt < 2) {
+          const targetLoss = Math.min(Math.max(rawLossUsdt, 2), 4.5); // strictly between $2 and $4.50
+          const allowedPriceDiff = (targetLoss / positionSizeUsdt) * entryPrice;
+          if (trend === 'bullish') {
+              slPrice = entryPrice - allowedPriceDiff;
+          } else {
+              slPrice = entryPrice + allowedPriceDiff;
+          }
+      }
       
       // Calculate projected profit based on position size
       const priceDiff = Math.abs(targetPrice - entryPrice);
@@ -478,7 +498,7 @@ async function startServer() {
              trend,
              entry,
              target,
-             stopLoss,
+             stopLoss: slPrice,
              amount: tradeAmountDollars,
              setupData,
              expiresAt
@@ -920,6 +940,24 @@ async function startServer() {
               const positionSizeUsdt = tradeAmountDollars * leverage;
               const priceDiff = Math.abs(algoResult.target - algoResult.entry);
               const projectedProfit = (positionSizeUsdt / algoResult.entry) * priceDiff;
+              
+              let slPrice = algoResult.stopLoss;
+              let rawLossUsdt = 0;
+              if (algoResult.trend === 'bullish') {
+                  rawLossUsdt = (positionSizeUsdt / algoResult.entry) * (algoResult.entry - slPrice);
+              } else {
+                  rawLossUsdt = (positionSizeUsdt / algoResult.entry) * (slPrice - algoResult.entry);
+              }
+
+              if (rawLossUsdt > 5 || rawLossUsdt < 2) {
+                  const targetLoss = Math.min(Math.max(rawLossUsdt, 2), 4.5);
+                  const allowedPriceDiff = (targetLoss / positionSizeUsdt) * algoResult.entry;
+                  if (algoResult.trend === 'bullish') {
+                      slPrice = algoResult.entry - allowedPriceDiff;
+                  } else {
+                      slPrice = algoResult.entry + allowedPriceDiff;
+                  }
+              }
 
               if (entryDiff < 0.15 && projectedProfit >= 0.1) {
                  foundAlerts.push({
@@ -929,7 +967,7 @@ async function startServer() {
                    trend: algoResult.trend,
                    entry: algoResult.entry,
                    target: algoResult.target,
-                   stopLoss: algoResult.stopLoss,
+                   stopLoss: slPrice,
                    reasoning: algoResult.reasoning,
                    currentPrice: currentPrice,
                    projectedProfit
@@ -973,13 +1011,33 @@ async function startServer() {
                        const tradeAmountDollars = +(currentBudget / 3).toFixed(2);
                        const leverage = 10;
                        
+                       const activePosSize = tradeAmountDollars * leverage;
+                       let activeSl = alert.stopLoss;
+                       
+                       let activeRawLoss = 0;
+                       if (alert.trend === 'bullish') {
+                           activeRawLoss = (activePosSize / alert.entry) * (alert.entry - activeSl);
+                       } else {
+                           activeRawLoss = (activePosSize / alert.entry) * (activeSl - alert.entry);
+                       }
+
+                       if (activeRawLoss > 5 || activeRawLoss < 2) {
+                           const targetLoss = Math.min(Math.max(activeRawLoss, 2), 4.5);
+                           const allowedPriceDiff = (targetLoss / activePosSize) * alert.entry;
+                           if (alert.trend === 'bullish') {
+                               activeSl = alert.entry - allowedPriceDiff;
+                           } else {
+                               activeSl = alert.entry + allowedPriceDiff;
+                           }
+                       }
+
                        const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
                        await TradeSignal.create({
                            symbol: alert.symbol,
                            trend: alert.trend,
                            entry: alert.entry,
                            target: alert.target,
-                           stopLoss: alert.stopLoss,
+                           stopLoss: activeSl,
                            amount: tradeAmountDollars,
                            expiresAt,
                            setupData: { reasoning: alert.reasoning, params: alert }
