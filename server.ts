@@ -34,7 +34,7 @@ const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'pro', 'user'], default: 'user' },
+  role: { type: String, enum: ['super_admin', 'admin', 'pro', 'user'], default: 'user' },
   binanceApiKey: { type: String },
   binanceSecretKey: { type: String },
   useCustomAlgo: { type: Boolean, default: false },
@@ -224,7 +224,7 @@ async function startServer() {
   };
 
   const adminMiddleware = (req: any, res: any, next: any) => {
-    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Requires admin role' });
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Requires admin role' });
     next();
   };
 
@@ -317,7 +317,7 @@ async function startServer() {
 
   // User Management
   app.get('/api/users', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
     if (!isDbConnected) return res.json([]);
     try {
        const users = await (User as any).find({}, { password: 0 }); // Exclude passwords
@@ -328,7 +328,7 @@ async function startServer() {
   });
 
   app.put('/api/users/:id', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
     if (!isDbConnected) return res.status(500).json({ error: 'Database is not connected.' });
     try {
        const { role } = req.body;
@@ -352,7 +352,7 @@ async function startServer() {
 
   app.put('/api/users/settings', authMiddleware, async (req: any, res) => {
     if (!isDbConnected) return res.status(500).json({ error: 'Database is not connected.' });
-    if (req.user.role !== 'pro' && req.user.role !== 'admin') {
+    if (req.user.role !== 'pro' && req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
       return res.status(403).json({ error: 'Only PRO users can update these settings' });
     }
     try {
@@ -717,7 +717,7 @@ async function startServer() {
   });
 
   app.post('/api/trade/place', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'pro') {
       return res.status(403).json({ error: 'Only PRO users and Admins can place trades.' });
     }
     
@@ -768,7 +768,7 @@ async function startServer() {
   });
 
   app.post('/api/trade/tpsl', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'pro') {
       return res.status(403).json({ error: 'Only PRO users and Admins can manage TP/SL' });
     }
     const { symbol, tp, sl, positionSide } = req.body;
@@ -813,7 +813,7 @@ async function startServer() {
   });
 
   app.post('/api/trade/close', authMiddleware, async (req: any, res) => {
-     if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+     if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'super_admin' && req.user.role !== 'pro') {
        return res.status(403).json({ error: 'Only PRO users and Admins can manage trades' });
      }
      const { symbol } = req.body;
@@ -849,6 +849,38 @@ async function startServer() {
      }
   });
 
+  app.post('/api/trade/close_auto', authMiddleware, async (req: any, res) => {
+     if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'super_admin') {
+       return res.status(403).json({ error: 'Only Admins can manage auto trades' });
+     }
+     const { tradeId } = req.body;
+     try {
+       const trade = await BotSignal.findById(tradeId);
+       if (!trade) return res.status(404).json({ error: 'Trade not found' });
+       
+       trade.status = 'loss'; // effectively cancelled or forced closed
+       trade.resolvedAt = new Date();
+       trade.amount = trade.amount || 0;
+       
+       let realizedPnl = 0;
+       if (trade.binanceOrderId) {
+           // Pricing Live Paper Auto Trade
+           try {
+               const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.symbol}`);
+               const currentPrice = parseFloat(tickRes.data.price);
+               const diff = trade.trend === 'bullish' ? (currentPrice - trade.entry) / trade.entry : (trade.entry - currentPrice) / trade.entry;
+               realizedPnl = diff * trade.amount * 10;
+           } catch(e) {}
+       }
+       trade.realizedPnl = realizedPnl;
+       
+       await trade.save();
+       res.json({ success: true, message: 'Auto trade forced closed' });
+     } catch(e: any) {
+       res.status(500).json({ error: e.message });
+     }
+  });
+
   app.post('/api/users/upgrade-pro', authMiddleware, async (req: any, res) => {
     if (!isDbConnected) {
        return res.status(500).json({ error: 'Database is not connected. Upgrade is disabled in memory mode.' });
@@ -864,7 +896,7 @@ async function startServer() {
 
   // Perform AI Analysis (Admin and Pro users)
   app.post('/api/analysis/generate', authMiddleware, async (req: any, res) => {
-    if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'pro') {
        return res.status(403).json({ error: 'Only PRO users and Admins can generate analysis.' });
     }
     const { symbol, interval, data } = req.body;
@@ -1098,7 +1130,7 @@ async function startServer() {
             // PRO User Custom Algos
             if (isDbConnected) {
                 const evalProUsers = await (User as any).find({ 
-                   role: { $in: ['pro', 'admin'] }, 
+                   role: { $in: ['pro', 'admin', 'super_admin'] }, 
                    useCustomAlgo: true, 
                    pineCode: { $exists: true, $ne: '' }
                 });
@@ -1342,7 +1374,7 @@ async function startServer() {
                                  await signal.save();
                                  
                                  const proUsers = await (User as any).find({ 
-                                     role: { $in: ['pro', 'admin'] }
+                                     role: { $in: ['pro', 'admin', 'super_admin'] }
                                  });
                                  for (const pUser of proUsers) {
                                      try {
@@ -1625,7 +1657,7 @@ async function startServer() {
 
   // Manual Trigger Endpoint for Settings
   app.post('/api/ml/optimize', authMiddleware, async (req: any, res) => {
-      if (req.user.role !== 'admin' && req.user.role !== 'pro') {
+      if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'pro') {
          return res.status(403).json({ error: 'Only PRO users and Admins can run the optimizer.' });
       }
       // Force it to run

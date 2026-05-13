@@ -113,10 +113,37 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   if (pivots.length < 5) {
     // Fallback if not enough pivots found
     const len = data.length;
-    const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
+    // Momentum fallback: if price pumped over 50 periods, it has bullish momentum.
+    // If price dumped massively, it has bearish momentum.
+    // Additionally, consider RSI if available
+    let isBull = false; // Default
+    if (data.length > 30) {
+       const period = 14;
+       let gains = 0, losses = 0;
+       for (let i = len - period; i < len; i++) {
+          const change = data[i].close - data[i-1].close;
+          if (change > 0) gains += change;
+          else losses -= change;
+       }
+       let avgGain = gains / period;
+       let avgLoss = losses / period;
+       let currentRsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+       
+       if (currentRsi > 55) {
+           isBull = true; // Momentum -> Bullish
+       } else if (currentRsi < 45) {
+           isBull = false; // Momentum -> Bearish
+       } else {
+           isBull = data[len-1].close > data[Math.max(0, len-50)].close; // Simple trend following
+       }
+    } else {
+       isBull = data[len-1].close > data[Math.max(0, len-50)].close; // Simple trend following
+    }
+
     const entry = data[len-1].close;
-    const target = isBull ? entry * 1.05 : entry * 0.95;
-    let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+    
+    let target = isBull ? entry * 1.05 : entry * 0.95;
+    let stop = isBull ? entry * 0.97 : entry * 1.03; // Simple 3% risk
 
     // Enforce 2% to 5% risk bound
     if (isBull) {
@@ -144,7 +171,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       target: target,
       tradeStyle,
       gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Not enough distinct market pivots found to form a complex Elliott wave. Best-effort directional projection based on recent trend. Drawing simple structural bounds.${rsiDivergence}`
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Mean-reversion fallback applied due to lack of distinct market pivots. Drawing structural bounds based on momentum exhaustion.${rsiDivergence}`
     };
   }
 
@@ -220,14 +247,26 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage (i.e. 2% to 5% max risk)
-        const minSL = suggestedEntry * (1 - 0.05); // Max 5% drop (costs $5)
-        const maxSL = suggestedEntry * (1 - 0.02); // Min 2% drop (costs $2)
-        if (validStopLoss < minSL) validStopLoss = minSL;
-        if (validStopLoss > maxSL) validStopLoss = maxSL;
+        const minSL_price = suggestedEntry * (1 - 0.05); // Max 5% drop
+        const maxSL_price = suggestedEntry * (1 - 0.02); // Min 2% drop
+        if (validStopLoss < minSL_price) validStopLoss = minSL_price;
+        if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
+
+        // Enforce target to be a reasonable Risk/Reward (at least 1.5x up to 4x)
+        let finalTargetCopy = finalTarget;
+        const minTarget = suggestedEntry * (1 + 0.03); // Min 3% move
+        const maxTarget = suggestedEntry * (1 + 0.15); // Max 15% move
+        if (finalTargetCopy < minTarget) finalTargetCopy = minTarget;
+        if (finalTargetCopy > maxTarget) finalTargetCopy = maxTarget;
         
         // Only accept if not invalidated securely
+        if (!isInvalidated && currentPrice <= validStopLoss) {
+            isInvalidated = true; // recheck with clamped SL
+        }
+
+        // Only accept if not invalidated securely
         if (!isInvalidated) {
-            const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
+            const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
             bestSetup = {
               score,
@@ -249,7 +288,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               ],
               entry: suggestedEntry,
               stopLoss: validStopLoss, // Invalidation line
-              target: finalTarget,
+              target: finalTargetCopy,
               tradeStyle,
               gainPct,
               reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`
@@ -319,16 +358,28 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         } else if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }
-
+        
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage
         const maxSL_price = suggestedEntry * (1 + 0.05); // Max 5% climb (costs $5)
         const minSL_price = suggestedEntry * (1 + 0.02); // Min 2% climb (costs $2)
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
 
+        // Enforce target to be a reasonable Risk/Reward
+        let finalTargetCopy = finalTarget;
+        const minTarget_b = suggestedEntry * (1 - 0.03); // Min 3% drop
+        const maxTarget_b = suggestedEntry * (1 - 0.15); // Max 15% drop
+        if (finalTargetCopy > minTarget_b) finalTargetCopy = minTarget_b;
+        if (finalTargetCopy < maxTarget_b) finalTargetCopy = maxTarget_b;
+
+        // Check if clamped SL invalidates the trade
+        if (!isInvalidated && currentPrice >= validStopLoss) {
+            isInvalidated = true;
+        }
+
         // Only accept if not invalidated securely
         if (!isInvalidated) {
-            const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
+            const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
             bestSetup = {
               score,
@@ -350,7 +401,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               ],
               entry: suggestedEntry,
               stopLoss: validStopLoss,
-              target: finalTarget,
+              target: finalTargetCopy,
               tradeStyle,
               gainPct,
               reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`

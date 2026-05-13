@@ -3,7 +3,7 @@ import axios from 'axios';
 
 interface User {
   email: string;
-  role: 'admin' | 'user' | 'pro';
+  role: 'admin' | 'super_admin' | 'user' | 'pro';
 }
 
 interface AuthContextType {

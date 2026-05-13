@@ -431,7 +431,7 @@ export function Dashboard() {
   };
 
   const handleGenerate = async () => {
-    if (!user || (user.role !== 'admin' && user.role !== 'pro')) return;
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'pro')) return;
     setGenerating(true);
     try {
       const safeInterval = (!interval || interval === 'undefined') ? '1d' : interval;
@@ -530,7 +530,7 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    if (showSettings && settingsTab === 'admin' && user?.role === 'admin') {
+    if (showSettings && settingsTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin')) {
       fetchUsers();
     }
   }, [showSettings, settingsTab]);
@@ -620,7 +620,7 @@ export function Dashboard() {
   // Flash notifications every 5 mins or so auto scan
   useEffect(() => {
     const scanInterval = setInterval(() => {
-       if (user?.role === 'admin' || user?.role === 'pro') {
+       if ((user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'pro')) {
          handleScanBestPair();
        }
     }, 60000 * 5); // every 5 minutes
@@ -732,7 +732,7 @@ export function Dashboard() {
           </button>
           
           {/* Admin Tools - Mobile (Icons Only) */}
-             {(user?.role === 'admin' || user?.role === 'pro') && (
+             {((user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'pro')) && (
                <>
                  <button 
                     onClick={handleScanBestPair} 
@@ -755,7 +755,7 @@ export function Dashboard() {
              )}
 
           {/* Admin Tools - Desktop (With Text) */}
-             {(user?.role === 'admin' || user?.role === 'pro') && (
+             {((user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'pro')) && (
                <>
                  <button 
                     onClick={handleScanBestPair} 
@@ -1217,6 +1217,21 @@ plot(close)"
                                            </span>
                                        )}
                                        {trade.unrealizedPnl === undefined && trade.binanceOrderId && <span className="text-xs text-[#787b86] animate-pulse">Pricing...</span>}
+                                       <button 
+                                         onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if(window.confirm(`Close auto-trade for ${trade.symbol}?`)) {
+                                              try {
+                                                 await axios.post('/api/trade/close_auto', { tradeId: trade._id });
+                                                 alert("Closed!");
+                                                 fetchTrades();
+                                              } catch(err:any) { alert(err.response?.data?.error || err.message); }
+                                            }
+                                         }}
+                                         className="ml-2 bg-[#f23645]/10 hover:bg-[#f23645]/20 text-[#f23645] text-[10px] px-2 py-0.5 rounded transition-colors uppercase font-bold"
+                                       >
+                                         Close
+                                       </button>
                                      </div>
                                   </div>
                                ))}
@@ -1363,7 +1378,7 @@ plot(close)"
             )}
             
             {/* Trade Section - Only visible to super admin */}
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || user?.role === 'super_admin') && (
             <div className="bg-[#1e222d] border-t border-[#2a2e39] p-4 text-sm mt-auto shrink-0 flex flex-col z-20 w-full" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
                 <div className="text-xs uppercase text-[#787b86] font-semibold mb-3 flex items-center justify-between">
                    <div className="flex flex-row items-center gap-1"><DollarSign className="w-3 h-3" /> Execute Trade</div>
@@ -1486,7 +1501,7 @@ plot(close)"
                             </div>
                             <div>
                                <label className="block text-xs text-[#787b86] mb-1">Role</label>
-                               <div className={`bg-[#131722] border border-[#2a2e39] p-2 text-sm rounded font-bold tracking-wide ${user?.role === 'admin' ? 'text-[#089981]' : user?.role === 'pro' ? 'text-[#2962ff]' : 'text-white'}`}>{user?.role?.toUpperCase() || 'USER'}</div>
+                               <div className={`bg-[#131722] border border-[#2a2e39] p-2 text-sm rounded font-bold tracking-wide ${user?.role === 'admin' || user?.role === 'super_admin' ? 'text-[#089981]' : user?.role === 'pro' ? 'text-[#2962ff]' : 'text-white'}`}>{user?.role?.toUpperCase() || 'USER'}</div>
                             </div>
                          </div>
                       </div>
@@ -1514,7 +1529,7 @@ plot(close)"
 
                       <div className="border-t border-[#2a2e39] pt-6">
                          <h3 className="text-white font-bold mb-4">Pro Subscription</h3>
-                         {user?.role === 'pro' || user?.role === 'admin' ? (
+                         {(user?.role === 'pro' || user?.role === 'admin' || user?.role === 'super_admin') ? (
                            <div className="bg-[#2962ff]/10 border border-[#2962ff] p-4 rounded text-[#d1d4dc] text-sm">
                              <div className="text-[#2962ff] font-bold mb-1">PRO Active</div>
                              You currently have PRO access.
@@ -1566,7 +1581,7 @@ plot(close)"
                               <div key={u._id || idx} className="flex justify-between items-center p-4 border-b border-[#2a2e39] last:border-0">
                                  <div className="w-1/3">
                                    <div className="text-sm font-bold text-white">{u.email}</div>
-                                   <div className={`text-xs ${u.role === 'admin' ? 'text-[#089981]' : u.role === 'pro' ? 'text-[#2962ff]' : 'text-[#787b86]'}`}>{u.role.toUpperCase()}</div>
+                                   <div className={`text-xs ${u.role === 'admin' || u.role === 'super_admin' ? 'text-[#089981]' : u.role === 'pro' ? 'text-[#2962ff]' : 'text-[#787b86]'}`}>{u.role.toUpperCase()}</div>
                                  </div>
                                  <div className="w-1/4">
                                     <select 

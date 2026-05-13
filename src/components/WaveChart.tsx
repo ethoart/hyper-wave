@@ -199,26 +199,18 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
          const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
          const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
          levels.forEach((l, i) => {
-             const line = chart.addSeries(LineSeries, {
-                 color: colors[i] || shape.color,
-                 lineWidth: 1, lineStyle: 2,
-                 crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
-             });
              const levelPrice = p1.value + diff * l;
              try {
-                const nt1 = getNumericTime(p1.time);
-                const nt2 = getNumericTime(p2.time);
-                if (nt1 === nt2) return;
-                const pData = nt1 < nt2 ? [
-                    { time: p1.time as any, value: levelPrice },
-                    { time: p2.time as any, value: levelPrice }
-                ] : [
-                    { time: p2.time as any, value: levelPrice },
-                    { time: p1.time as any, value: levelPrice }
-                ];
-                line.setData(pData);
+                const pl = userSrs.createPriceLine({
+                    price: levelPrice,
+                    color: colors[i] || shape.color,
+                    lineWidth: 1,
+                    lineStyle: 1,
+                    axisLabelVisible: true,
+                    title: `${l}`
+                });
+                pLines.push(pl);
              } catch(e) {}
-             auxSeries.push(line);
          });
      } else if (shape.tool === 'rectangle' && shape.points.length === 2) {
          const p1 = shape.points[0]; const p2 = shape.points[1];
@@ -755,7 +747,21 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  userDrawings.current.push(newPoint);
              }
              
-             const sortedPts = [...userDrawings.current].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
+             let sortedPts = [...userDrawings.current].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
+             const uniquePts = [];
+             const seenTimes = new Set();
+             for (const p of sortedPts) {
+                 if (!seenTimes.has(p.time)) {
+                    seenTimes.add(p.time);
+                    uniquePts.push(p);
+                 } else {
+                    const newTime = (p.time as number) + 0.001;
+                    seenTimes.add(newTime);
+                    uniquePts.push({ ...p, time: newTime });
+                 }
+             }
+             sortedPts = uniquePts;
+
              try { userSeriesRef.current.setData(sortedPts as any[]); } catch(e) {}
              
              if (activeTool === 'measure' && userDrawings.current.length === 2) {
@@ -778,35 +784,27 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                 const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
                 const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
                 
-                if (auxiliarySeriesRef.current.length === 0) {
+                if (targetPriceLinesRef.current.length === 0 && userSeriesRef.current) {
                     levels.forEach((l, i) => {
-                        const line = chart.addSeries(LineSeries, {
-                            color: colors[i] || drawingColor,
-                            lineWidth: 1, lineStyle: 2,
-                            crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
-                        });
-                        auxiliarySeriesRef.current.push(line);
+                        try {
+                           const pl = userSeriesRef.current!.createPriceLine({
+                               price: p1.value + diff * l,
+                               color: colors[i] || drawingColor,
+                               lineWidth: 1, lineStyle: 1,
+                               axisLabelVisible: true, title: `${l}`
+                           });
+                           targetPriceLinesRef.current.push(pl);
+                        } catch(e) {}
+                    });
+                } else {
+                    levels.forEach((l, i) => {
+                        if (targetPriceLinesRef.current[i]) {
+                           try {
+                               targetPriceLinesRef.current[i].applyOptions({ price: p1.value + diff * l });
+                           } catch(e) {}
+                        }
                     });
                 }
-                
-                levels.forEach((l, i) => {
-                    const levelPrice = p1.value + diff * l;
-                    if (auxiliarySeriesRef.current[i]) {
-                        try {
-    const nt1 = getNumericTime(p1.time);
-    const nt2 = getNumericTime(p2.time);
-    if (nt1 === nt2) return;
-    const pData = nt1 < nt2 ? [
-        { time: p1.time as any, value: levelPrice },
-        { time: p2.time as any, value: levelPrice }
-    ] : [
-        { time: p2.time as any, value: levelPrice },
-        { time: p1.time as any, value: levelPrice }
-    ];
-    auxiliarySeriesRef.current[i].setData(pData);
-} catch(e) {}
-                    }
-                });
              } else if (activeTool === 'rectangle' && userDrawings.current.length === 2) {
                 const p1 = userDrawings.current[0];
                 const p2 = userDrawings.current[1];
@@ -891,7 +889,21 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
            if (price !== null) {
               const livePoint = { time: param.time as number, value: price };
               const filteredDrawings = userDrawings.current.filter(p => p.time !== param.time);
-              const pts = [...filteredDrawings, livePoint].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
+              let pts = [...filteredDrawings, livePoint].sort((a,b) => getNumericTime(a.time) - getNumericTime(b.time));
+              
+              const uniquePts = [];
+              const seenTimes = new Set();
+              for (const p of pts) {
+                 if (!seenTimes.has(p.time)) {
+                    seenTimes.add(p.time);
+                    uniquePts.push(p);
+                 } else {
+                    const newTime = (p.time as number) + 0.001;
+                    seenTimes.add(newTime);
+                    uniquePts.push({ ...p, time: newTime });
+                 }
+              }
+              pts = uniquePts;
               
               if (activeTool === 'measure') {
                  try {
@@ -915,35 +927,27 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                  const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618];
                  const colors = ['#787b86', '#ef5350', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#787b86', '#089981'];
                  
-                 if (auxiliarySeriesRef.current.length === 0) {
+                 if (targetPriceLinesRef.current.length === 0 && userSeriesRef.current) {
                      levels.forEach((l, i) => {
-                         const line = chart.addSeries(LineSeries, {
-                             color: colors[i] || drawingColor,
-                             lineWidth: 1, lineStyle: 2,
-                             crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false
-                         });
-                         auxiliarySeriesRef.current.push(line);
+                         try {
+                             const pl = userSeriesRef.current!.createPriceLine({
+                                 price: p1.value + diff * l,
+                                 color: colors[i] || drawingColor,
+                                 lineWidth: 1, lineStyle: 1,
+                                 axisLabelVisible: true, title: `${l}`
+                             });
+                             targetPriceLinesRef.current.push(pl);
+                         } catch(e) {}
+                     });
+                 } else {
+                     levels.forEach((l, i) => {
+                         if (targetPriceLinesRef.current[i]) {
+                             try {
+                                 targetPriceLinesRef.current[i].applyOptions({ price: p1.value + diff * l });
+                             } catch(e) {}
+                         }
                      });
                  }
-                 
-                 levels.forEach((l, i) => {
-                     const levelPrice = p1.value + diff * l;
-                     if (auxiliarySeriesRef.current[i]) {
-                         try {
-    const nt1 = getNumericTime(p1.time);
-    const nt2 = getNumericTime(p2.time);
-    if (nt1 === nt2) return;
-    const pData = nt1 < nt2 ? [
-        { time: p1.time as any, value: levelPrice },
-        { time: p2.time as any, value: levelPrice }
-    ] : [
-        { time: p2.time as any, value: levelPrice },
-        { time: p1.time as any, value: levelPrice }
-    ];
-    auxiliarySeriesRef.current[i].setData(pData);
-} catch(e) {}
-                     }
-                 });
                  
               } else if (activeTool !== 'rectangle') {
                  try { userSeriesRef.current.setData(pts as any[]); } catch(e) {}
