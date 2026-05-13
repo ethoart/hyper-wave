@@ -608,10 +608,17 @@ async function startServer() {
          ...closedSignals.map(sig => ({ 
              ...sig.toObject(), 
              type: 'auto', 
-             realizedPnl: sig.pnl ? (sig.amount * 10 * sig.pnl / 100) : 0,
-             pnlPercent: sig.pnl ? (sig.pnl * 10) : 0
+             realizedPnl: sig.pnlPercent ? (sig.amount * 10 * sig.pnlPercent / 100) : 0,
+             pnlPercent: sig.pnlPercent ? (sig.pnlPercent) : 0
          })),
-         ...closedUserTrades.map(ut => ({ ...ut.toObject(), type: 'manual', trend: ut.side === 'BUY' ? 'bullish' : 'bearish', pnlPercent: (ut.realizedPnl / (ut.amount * 10)) * 100 }))
+         ...closedUserTrades.map(ut => ({ 
+             ...ut.toObject(), 
+             type: 'manual', 
+             trend: ut.side === 'BUY' ? 'bullish' : 'bearish', 
+             entry: ut.entry || ut.entryPrice,
+             target: ut.target || ut.takeProfit,
+             pnlPercent: ut.realizedPnl ? (ut.realizedPnl / (ut.amount * 10)) * 100 : 0
+         }))
       ].sort((a: any, b: any) => (new Date(b.resolvedAt || b.timestamp).getTime() - new Date(a.resolvedAt || a.timestamp).getTime())).slice(0, 50);
       
       let balance = 0;
@@ -1428,26 +1435,37 @@ async function startServer() {
          const liveUserPaperTrades = await UserTrade.find({ status: 'live', binanceOrderId: /^paper_/ });
          for (const ut of liveUserPaperTrades) {
              try {
+                 // Auto-heal inverted sides
+                 const entry = ut.entry || ut.entryPrice;
+                 const target = ut.target || ut.takeProfit;
+                 if (entry && target) {
+                     if (ut.side === 'BUY' && target < entry) { ut.side = 'SELL'; await ut.save(); }
+                     else if (ut.side === 'SELL' && target > entry) { ut.side = 'BUY'; await ut.save(); }
+                 }
+                 
                  const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${ut.symbol}`);
                  const price = parseFloat(response.data.price);
                  let outcome = 'live';
                  let realizedPnl = 0;
                  
+                 const entry = ut.entry || ut.entryPrice;
+                 const target = ut.target || ut.takeProfit;
+                 
                  if (ut.side === 'BUY') {
-                     if (ut.target && price >= ut.target) {
+                     if (target && price >= target) {
                          outcome = 'win';
-                         realizedPnl = (ut.target - ut.entry) / ut.entry * ut.amount * 10;
+                         realizedPnl = (target - entry) / entry * ut.amount * 10;
                      } else if (ut.stopLoss && price <= ut.stopLoss) {
                          outcome = 'loss';
-                         realizedPnl = (ut.stopLoss - ut.entry) / ut.entry * ut.amount * 10;
+                         realizedPnl = (ut.stopLoss - entry) / entry * ut.amount * 10;
                      }
                  } else if (ut.side === 'SELL') {
-                     if (ut.target && price <= ut.target) {
+                     if (target && price <= target) {
                          outcome = 'win';
-                         realizedPnl = (ut.entry - ut.target) / ut.entry * ut.amount * 10;
+                         realizedPnl = (entry - target) / entry * ut.amount * 10;
                      } else if (ut.stopLoss && price >= ut.stopLoss) {
                          outcome = 'loss';
-                         realizedPnl = (ut.entry - ut.stopLoss) / ut.entry * ut.amount * 10;
+                         realizedPnl = (entry - ut.stopLoss) / entry * ut.amount * 10;
                      }
                  }
                  
