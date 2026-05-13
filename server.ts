@@ -741,7 +741,6 @@ async function startServer() {
     let executedPrice = 0;
 
     try {
-        const { placeBinanceTrade, setBinanceLeverage } = await import('./binanceService.js');
         if (leverage) {
             await setBinanceLeverage(symbol, parseInt(leverage), apiKey, apiSecret);
         }
@@ -851,7 +850,6 @@ async function startServer() {
        const user = await User.findById(req.user._id);
        const apiKey = user?.binanceApiKey;
        const secretKey = user?.binanceSecretKey;
-       const { closeBinancePosition } = await import('./binanceService.js');
        const result = await closeBinancePosition(symbol, apiKey, secretKey);
        res.json(result);
      } catch(e: any) {
@@ -865,7 +863,7 @@ async function startServer() {
      }
      const { tradeId } = req.body;
      try {
-       const trade = await BotSignal.findById(tradeId);
+       const trade = await TradeSignal.findById(tradeId);
        if (!trade) return res.status(404).json({ error: 'Trade not found' });
        
        trade.status = 'loss'; // effectively cancelled or forced closed
@@ -1368,7 +1366,6 @@ async function startServer() {
                                  
                                  let orderId = '';
                                  try {
-                                     const { setBinanceLeverage } = await import('./binanceService.js');
                                      await setBinanceLeverage(signal.symbol, leverage);
                                      
                                      const apiRes = await placeBinanceTrade(signal.symbol, side, parseFloat(quantity), 'MARKET', signal.stopLoss, signal.target);
