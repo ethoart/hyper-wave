@@ -621,13 +621,13 @@ async function startServer() {
          }))
       ].sort((a: any, b: any) => (new Date(b.resolvedAt || b.timestamp).getTime() - new Date(a.resolvedAt || a.timestamp).getTime())).slice(0, 50);
       
-      let balance = 0;
+      let balance: number | null = null;
       let livePositions: any[] = [];
       try {
          const user = await User.findById(req.user._id);
          const apiKey = user?.binanceApiKey;
          const secretKey = user?.binanceSecretKey;
-         balance = await getBinanceBalance(apiKey, secretKey) || 0;
+         balance = await getBinanceBalance(apiKey, secretKey);
          livePositions = await getBinancePositions(apiKey, secretKey) || [];
          
          const userPaperTrades = await UserTrade.find({ userId: req.user._id, status: 'live', binanceOrderId: /^paper_/ });
@@ -722,8 +722,9 @@ async function startServer() {
     }
     
     const user = await User.findById(req.user._id);
-    const apiKey = user?.binanceApiKey || process.env.BINANCE_API_KEY;
-    const apiSecret = user?.binanceSecretKey || process.env.BINANCE_SECRET_KEY;
+    const isTestnet = process.env.BINANCE_TESTNET === 'true';
+    const apiKey = user?.binanceApiKey || (isTestnet ? process.env.BINANCE_TESTNET_API_KEY : process.env.BINANCE_API_KEY) || process.env.BINANCE_API_KEY;
+    const apiSecret = user?.binanceSecretKey || (isTestnet ? process.env.BINANCE_TESTNET_SECRET_KEY : process.env.BINANCE_SECRET_KEY) || process.env.BINANCE_SECRET_KEY;
 
     const { symbol, side, amount, leverage, takeProfit, stopLoss } = req.body;
     let orderTrackingId = '';
@@ -781,11 +782,11 @@ async function startServer() {
        }
 
        const user = await User.findById(req.user._id);
-       const apiKey = user?.binanceApiKey || process.env.BINANCE_TESTNET_API_KEY || process.env.BINANCE_API_KEY;
-       const secretKey = user?.binanceSecretKey || process.env.BINANCE_TESTNET_SECRET_KEY || process.env.BINANCE_SECRET_KEY;
+       const isTestnet = process.env.BINANCE_TESTNET === 'true';
+       const apiKey = user?.binanceApiKey || (isTestnet ? process.env.BINANCE_TESTNET_API_KEY : process.env.BINANCE_API_KEY) || process.env.BINANCE_API_KEY;
+       const secretKey = user?.binanceSecretKey || (isTestnet ? process.env.BINANCE_TESTNET_SECRET_KEY : process.env.BINANCE_SECRET_KEY) || process.env.BINANCE_SECRET_KEY;
        if (!apiKey || !secretKey) return res.status(500).json({ error: 'Configure Binance API keys in wallet settings' });
        
-       const isTestnet = process.env.BINANCE_TESTNET !== 'false';
        const baseEndpoint = isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
        const getSig = (qs: string) => crypto.createHmac('sha256', secretKey).update(qs).digest('hex');
 
