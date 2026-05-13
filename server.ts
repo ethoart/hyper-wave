@@ -1385,7 +1385,11 @@ async function startServer() {
                 
                 if (signal.binanceOrderId) {
                     if (signal.trend === 'bullish') {
-                        if (price >= signal.target) {
+                        let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * 10;
+                        if (currentPnl <= -10) {
+                            outcome = 'loss';
+                            pnl = -100 / 10; // -10% meaning 100% loss at 10x
+                        } else if (price >= signal.target) {
                             outcome = 'win';
                             pnl = (signal.target - signal.entry) / signal.entry * 100;
                         } else if (price <= signal.stopLoss) {
@@ -1393,7 +1397,11 @@ async function startServer() {
                             pnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
                         }
                     } else if (signal.trend === 'bearish') {
-                        if (price <= signal.target) {
+                        let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * 10;
+                        if (currentPnl <= -10) {
+                            outcome = 'loss';
+                            pnl = -100 / 10;
+                        } else if (price <= signal.target) {
                             outcome = 'win';
                             pnl = (signal.entry - signal.target) / signal.entry * 100;
                         } else if (price >= signal.stopLoss) {
@@ -1453,7 +1461,11 @@ async function startServer() {
                  let realizedPnl = 0;
                  
                  if (ut.side === 'BUY') {
-                     if (target && price >= target) {
+                     let currentPnl = (price - entry) / entry * ut.amount * 10;
+                     if (currentPnl <= -10) {
+                         outcome = 'loss';
+                         realizedPnl = -10;
+                     } else if (target && price >= target) {
                          outcome = 'win';
                          realizedPnl = (target - entry) / entry * ut.amount * 10;
                      } else if (ut.stopLoss && price <= ut.stopLoss) {
@@ -1461,7 +1473,11 @@ async function startServer() {
                          realizedPnl = (ut.stopLoss - entry) / entry * ut.amount * 10;
                      }
                  } else if (ut.side === 'SELL') {
-                     if (target && price <= target) {
+                     let currentPnl = (entry - price) / entry * ut.amount * 10;
+                     if (currentPnl <= -10) {
+                         outcome = 'loss';
+                         realizedPnl = -10;
+                     } else if (target && price <= target) {
                          outcome = 'win';
                          realizedPnl = (entry - target) / entry * ut.amount * 10;
                      } else if (ut.stopLoss && price >= ut.stopLoss) {

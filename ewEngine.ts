@@ -116,7 +116,17 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
     const entry = data[len-1].close;
     const target = isBull ? entry * 1.05 : entry * 0.95;
-    const stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+    let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+
+    // Enforce 2% to 5% risk bound
+    if (isBull) {
+        if (stop < entry * 0.95) stop = entry * 0.95;
+        if (stop > entry * 0.98) stop = entry * 0.98;
+    } else {
+        if (stop > entry * 1.05) stop = entry * 1.05;
+        if (stop < entry * 1.02) stop = entry * 1.02;
+    }
+
     const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
 
     return {
@@ -208,6 +218,12 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         } else if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }
+        
+        // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage (i.e. 2% to 5% max risk)
+        const minSL = suggestedEntry * (1 - 0.05); // Max 5% drop (costs $5)
+        const maxSL = suggestedEntry * (1 - 0.02); // Min 2% drop (costs $2)
+        if (validStopLoss < minSL) validStopLoss = minSL;
+        if (validStopLoss > maxSL) validStopLoss = maxSL;
         
         // Only accept if not invalidated securely
         if (!isInvalidated) {
@@ -304,6 +320,12 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             isInvalidated = true; // Trade is over or failed
         }
 
+        // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage
+        const maxSL_price = suggestedEntry * (1 + 0.05); // Max 5% climb (costs $5)
+        const minSL_price = suggestedEntry * (1 + 0.02); // Min 2% climb (costs $2)
+        if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
+        if (validStopLoss < minSL_price) validStopLoss = minSL_price;
+
         // Only accept if not invalidated securely
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTarget - suggestedEntry) / suggestedEntry * 100).toFixed(2);
@@ -344,7 +366,17 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
     const entry = data[len-1].close;
     const target = isBull ? entry * 1.05 : entry * 0.95;
-    const stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+    let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
+
+    // Enforce 2% to 5% risk bound
+    if (isBull) {
+        if (stop < entry * 0.95) stop = entry * 0.95;
+        if (stop > entry * 0.98) stop = entry * 0.98;
+    } else {
+        if (stop > entry * 1.05) stop = entry * 1.05;
+        if (stop < entry * 1.02) stop = entry * 1.02;
+    }
+
     const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
 
     return {
