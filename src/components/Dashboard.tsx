@@ -1209,6 +1209,9 @@ plot(close)"
                                         <span className="text-xs text-[#089981]">Target: {trade.target}</span>
                                         <span className="text-xs text-[#f23645]">SL: {trade.stopLoss}</span>
                                      </div>
+                                     <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]">
+                                        <span>Started: {new Date(trade.createdAt).toLocaleString()}</span>
+                                     </div>
                                      <div className="flex justify-between items-center w-full mt-1">
                                        <span className="text-[10px] text-[#787b86]">Amt: ${trade.amount}</span>
                                        {trade.unrealizedPnl !== undefined && (
@@ -1268,6 +1271,14 @@ plot(close)"
                                      <div className="flex justify-between items-center w-full mb-1 text-xs text-[#787b86] cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
                                         <span>Exit: {trade.status === 'win' ? trade.target : trade.status === 'loss' ? trade.stopLoss : 'Manual'}</span>
                                      </div>
+                                     <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]" onClick={() => setSymbol(trade.symbol)}>
+                                        <span>Started: {new Date(trade.createdAt).toLocaleString()}</span>
+                                     </div>
+                                     {trade.resolvedAt && (
+                                     <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]" onClick={() => setSymbol(trade.symbol)}>
+                                        <span>Ended: {new Date(trade.resolvedAt).toLocaleString()}</span>
+                                     </div>
+                                     )}
                                      <div className="flex justify-between items-center w-full cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
                                         <span className="text-xs text-[#787b86]">Realized:</span>
                                         <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>

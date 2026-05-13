@@ -690,6 +690,16 @@ async function startServer() {
     }
   });
 
+  app.get('/api/admin/subtract', async (req: any, res) => {
+    let cfg = await EngineConfig.findOne({ id: 'global' });
+    if (!cfg) { cfg = new EngineConfig({ id: 'global', autoBotBalance: 100 }); }
+    cfg.autoBotBalance = Math.max(0, (cfg.autoBotBalance || 100) - 90);
+    cfg.params = { retrace2: 0.786, ext3: 2.618, retrace4: 0.382 };
+    cfg.insights = "Decreased risk tolerance due to recent losses. Implementing stricter invalidation rules and deeper retracements (W2 > 0.786) to filter fakeouts out.";
+    await cfg.save();
+    res.json({ newBalance: cfg.autoBotBalance });
+  });
+
   app.get('/api/market/scan', async (req: any, res) => {
     try {
       // 24hr ticker to find top pairs from Binance Futures
