@@ -635,22 +635,25 @@ async function startServer() {
              try {
                 const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${pt.symbol}`);
                 const currentPrice = parseFloat(tickRes.data.price);
+                const entry = pt.entry || pt.entryPrice;
                 let pnlNum = 0;
-                if (pt.side === 'BUY') {
-                    pnlNum = (currentPrice - pt.entryPrice) / pt.entryPrice * pt.amount * 10; // assuming 10x
-                } else {
-                    pnlNum = (pt.entryPrice - currentPrice) / pt.entryPrice * pt.amount * 10;
+                if (entry) {
+                    if (pt.side === 'BUY') {
+                        pnlNum = (currentPrice - entry) / entry * pt.amount * 10; // assuming 10x
+                    } else {
+                        pnlNum = (entry - currentPrice) / entry * pt.amount * 10;
+                    }
                 }
                 livePositions.push({
                    symbol: pt.symbol,
                    amount: pt.amount,
                    side: pt.side,
-                   entryPrice: pt.entryPrice,
+                   entryPrice: entry,
                    unRealizedProfit: pnlNum,
                    leverage: 10,
                    markPrice: currentPrice,
                    binanceOrderId: pt.binanceOrderId,
-                   target: pt.takeProfit,
+                   target: pt.target || pt.takeProfit,
                    stopLoss: pt.stopLoss
                 });
              } catch(e) {}
@@ -1447,9 +1450,6 @@ async function startServer() {
                  const price = parseFloat(response.data.price);
                  let outcome = 'live';
                  let realizedPnl = 0;
-                 
-                 const entry = ut.entry || ut.entryPrice;
-                 const target = ut.target || ut.takeProfit;
                  
                  if (ut.side === 'BUY') {
                      if (target && price >= target) {

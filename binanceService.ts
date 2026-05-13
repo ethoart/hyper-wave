@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 function getBaseUrl() {
-  const isTestnet = process.env.BINANCE_TESTNET !== 'false';
+  const isTestnet = process.env.BINANCE_TESTNET === 'true';
   return isTestnet ? 'https://testnet.binancefuture.com' : 'https://fapi.binance.com';
 }
 
