@@ -698,9 +698,9 @@ export function Dashboard() {
             <Search className="w-4 h-4 text-[#787b86] flex-shrink-0" />
             <input 
               value={symbolInput}
-              onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && setSymbol(symbolInput)}
-              onBlur={() => setSymbol(symbolInput)}
+              onChange={(e) => setSymbolInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onKeyDown={(e) => e.key === 'Enter' && setSymbol(symbolInput.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onBlur={() => setSymbol(symbolInput.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               className="bg-transparent border-none outline-none text-[#d1d4dc] w-full text-xs xl:text-sm font-medium focus:ring-0 uppercase placeholder:text-[#363a45]"
               placeholder="SYMBOL"
             />
@@ -822,9 +822,9 @@ export function Dashboard() {
             <Search className="w-3.5 h-3.5 text-[#787b86]" />
             <input 
               value={symbolInput}
-              onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && setSymbol(symbolInput)}
-              onBlur={() => setSymbol(symbolInput)}
+              onChange={(e) => setSymbolInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onKeyDown={(e) => e.key === 'Enter' && setSymbol(symbolInput.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onBlur={() => setSymbol(symbolInput.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               className="bg-transparent border-none outline-none text-[#d1d4dc] w-full text-xs font-bold focus:ring-0 uppercase placeholder:text-[#363a45]"
               placeholder="SYMBOL"
             />
@@ -1103,10 +1103,15 @@ plot(close)"
                       </div>
                    ) : rightSidebarTab === 'trades' ? (
                       <div className="flex flex-col gap-4">
-                         {binanceBalance !== null && (
-                            <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center">
+                         {binanceBalance !== null ? (
+                            <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center mb-4">
                                <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Wallet</span>
                                <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
+                            </div>
+                         ) : (
+                            <div className="bg-[#f23645]/10 border border-[#f23645]/20 p-3 rounded flex justify-between items-center mb-4 cursor-pointer" onClick={() => { setShowSettings(true); setSettingsTab('profile'); }}>
+                               <span className="text-xs text-[#f23645] font-bold uppercase">Binance Wallet</span>
+                               <span className="text-[#f23645] text-[10px] font-bold uppercase flex items-center gap-1 hover:text-white transition-colors">Setup API Keys <Settings className="w-3 h-3"/></span>
                             </div>
                          )}
                          <div className="flex-1">
