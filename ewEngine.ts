@@ -55,8 +55,9 @@ export function findPivots(data: Kline[], left: number = 3, right: number = 3): 
 }
 
 export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlParams?: any) {
-  // calculate RSI divergence over the last N candles
   let rsiDivergence = "";
+  let confirmations = [];
+  
   if (data.length > 30) {
      const period = 14;
      const rsiValues = [];
@@ -79,18 +80,44 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         rsiValues.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss)));
      }
      
-     // basic divergence check on last few candles vs 20 candles ago
      const rsiRecent = rsiValues[rsiValues.length - 1];
+     if (rsiRecent > 70) {
+         confirmations.push("⚠️ RSI is OVERBOUGHT (" + Math.round(rsiRecent) + "), suggesting potential exhaustion if bullish.");
+     } else if (rsiRecent < 30) {
+         confirmations.push("⚠️ RSI is OVERSOLD (" + Math.round(rsiRecent) + "), suggesting potential bounce if bearish.");
+     } else {
+         confirmations.push("✅ RSI is NEUTRAL (" + Math.round(rsiRecent) + "), providing room for trend continuation.");
+     }
+
      const rsiOld = rsiValues[Math.max(0, rsiValues.length - 20)];
      const priceRecent = data[data.length - 1].close;
      const priceOld = data[Math.max(0, data.length - 20)].close;
      
      if (priceRecent < priceOld && rsiRecent > rsiOld + 5) {
-         rsiDivergence = "\n\n⚠️ BULLISH RSI DIVERGENCE DETECTED: Price made a lower low but RSI made a higher low.";
+         confirmations.push("✅ BULLISH RSI DIVERGENCE: Price made a lower low but RSI made a higher low.");
      } else if (priceRecent > priceOld && rsiRecent < rsiOld - 5) {
-         rsiDivergence = "\n\n⚠️ BEARISH RSI DIVERGENCE DETECTED: Price made a higher high but RSI made a lower high.";
+         confirmations.push("✅ BEARISH RSI DIVERGENCE: Price made a higher high but RSI made a lower high.");
      }
   }
+
+  if (data.length > 50) {
+     const ema20 = data.slice(-20).reduce((acc, d) => acc + d.close, 0) / 20;
+     const ema50 = data.slice(-50).reduce((acc, d) => acc + d.close, 0) / 50;
+     
+     if (ema20 > ema50) {
+         confirmations.push("✅ TREND CONFIRMATION: Fast MA (20) > Slow MA (50) (Bullish Momentum).");
+     } else {
+         confirmations.push("✅ TREND CONFIRMATION: Fast MA (20) < Slow MA (50) (Bearish Momentum).");
+     }
+     
+     const recentVol = data.slice(-5).reduce((acc, d) => acc + d.volume, 0) / 5;
+     const oldVol = data.slice(-20, -5).reduce((acc, d) => acc + d.volume, 0) / 15;
+     if (recentVol > oldVol * 1.5) {
+         confirmations.push("✅ VOLUME: Significant volume spike detected (" + (recentVol/oldVol).toFixed(1) + "x average).");
+     }
+  }
+
+  rsiDivergence = confirmations.length > 0 ? "\n\nMULTIPLE CONFIRMATIONS:\n- " + confirmations.join("\n- ") : "";
 
   const pivots = findPivots(data, 12, 12); // 12 bars left/right lookback for stronger distinct structural waves
   
