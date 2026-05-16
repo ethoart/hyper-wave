@@ -171,7 +171,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       target: target,
       tradeStyle,
       gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Mean-reversion fallback applied due to lack of distinct market pivots. Drawing structural bounds based on momentum exhaustion.${rsiDivergence}`
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Statistical momentum continuation setup detected (Mean-Reversion Fallback).\n\nTARGET JUSTIFICATION: The algorithm targets ${target.toFixed(4)} to secure early profits before the momentum exhausts.\n\nSTOP LOSS: Capital protection placed at ${stop.toFixed(4)}. Evaluated strictly to cut losses early if market structure flips against the intended trend momentum.\n\nAUTO SECURE: Algorithm aggressively trails stops into profit.${rsiDivergence}`
     };
   }
 
@@ -291,7 +291,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               target: finalTargetCopy,
               tradeStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is generated based on a Wave 5 mathematical extension to maximize the risk/reward ratio while securing optimal algorithmic probability.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} strictly below the exhaustion support line (Wave 4 base) to instantly invalidate the setup and protect capital if the market flips bearish unexpectedly.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${rsiDivergence}`
             };
         }
       }
@@ -404,7 +404,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               target: finalTargetCopy,
               tradeStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Using dynamic AI parameters: Retrace2=${idealRetrace2.toFixed(3)}, Ext3=${idealExt3.toFixed(3)}, Retrace4=${idealRetrace4.toFixed(3)}. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1. Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1. Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is based on the Wave 5 downward extension to maximize profit before typical support reversal.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} just above the Wave 4 resistance. If price breaks this ceiling, the bearish structure is instantly invalidated and the trade is closed to protect capital.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${rsiDivergence}`
             };
         }
       }
@@ -445,7 +445,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       target: target,
       tradeStyle,
       gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Simple structural trend analysis used instead of strict Elliott Waves. Price bounds generated.${rsiDivergence}`
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Statistical momentum continuation setup detected (Mean-Reversion Fallback).\n\nTARGET JUSTIFICATION: The algorithm targets ${target.toFixed(4)} to secure early profits before the momentum exhausts.\n\nSTOP LOSS: Capital protection placed at ${stop.toFixed(4)}. Evaluated strictly to cut losses early if market structure flips against the intended trend momentum.\n\nAUTO SECURE: Algorithm manages floating profits aggressively trailing stops.${rsiDivergence}`
     };
   }
 

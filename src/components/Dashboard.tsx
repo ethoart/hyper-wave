@@ -8,7 +8,7 @@ import {
   MousePointer2, Crosshair, PenTool, TrendingUp, Search,
   PlayCircle, Loader2, List, Activity, Settings, LogOut, Code,
   Bell, BellRing, DollarSign, Send, Menu, X, PlusSquare,
-  AlignJustify, Square, Ruler, Spline, PanelRightClose, PanelRightOpen, Share2
+  AlignJustify, Square, Ruler, Spline, PanelRightClose, PanelRightOpen, Share2, Brain
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ethers } from 'ethers';
