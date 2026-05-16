@@ -1161,9 +1161,10 @@ plot(close)"
                                        <button 
                                          onClick={async (e) => {
                                            e.stopPropagation();
-                                           if(window.confirm(`Close position for ${pos.symbol}?`)) {
+                                           const reason = window.prompt(`Close position for ${pos.symbol}?\nOptional: Enter reason for closing (e.g., Taking manual profits early, News event, etc):`);
+                                           if(reason !== null) {
                                              try {
-                                                await axios.post('/api/trade/close', { symbol: pos.symbol });
+                                                await axios.post('/api/trade/close', { symbol: pos.symbol, reason });
                                                 alert("Closed!");
                                                 fetchTrades();
                                              } catch(err:any) { alert(err.response?.data?.error || err.message); }
@@ -1229,9 +1230,10 @@ plot(close)"
                                        <button 
                                          onClick={async (e) => {
                                             e.stopPropagation();
-                                            if(window.confirm(`Close auto-trade for ${trade.symbol}?`)) {
+                                            const reason = window.prompt(`Close auto-trade for ${trade.symbol}?\nOptional: Enter reason for closing:`);
+                                            if(reason !== null) {
                                               try {
-                                                 await axios.post('/api/trade/close_auto', { tradeId: trade._id });
+                                                 await axios.post('/api/trade/close_auto', { tradeId: trade._id, reason });
                                                  alert("Closed!");
                                                  fetchTrades();
                                               } catch(err:any) { alert(err.response?.data?.error || err.message); }
@@ -1289,6 +1291,16 @@ plot(close)"
                                         <span className="text-xs text-[#787b86]">Realized:</span>
                                         <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
                                      </div>
+                                     {trade.closeReason && (
+                                        <div className="mt-1 flex items-start gap-1 p-1 bg-[#1e222d] border border-[#2a2e39] rounded text-[9px] text-[#b2b5be]">
+                                           <strong>Closed:</strong> <span>{trade.closeReason}</span>
+                                        </div>
+                                     )}
+                                     {trade.closeReason && (
+                                        <div className="mt-1 flex items-start gap-1 p-1 bg-[#1e222d] border border-[#2a2e39] rounded text-[9px] text-[#b2b5be]">
+                                           <strong>Closed:</strong> <span>{trade.closeReason}</span>
+                                        </div>
+                                     )}
                                      {trade.setupData && trade.setupData.reasoning && (
                                        <div className="mt-2 p-2 bg-[rgba(41,98,255,0.05)] border border-[rgba(41,98,255,0.2)] rounded text-[10px] text-[#b2b5be] leading-relaxed">
                                           <div className="flex items-center gap-1 mb-1 text-[#2962ff] font-bold uppercase"><Brain className="w-3 h-3"/> AI Rationale</div>

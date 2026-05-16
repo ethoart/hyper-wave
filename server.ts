@@ -75,6 +75,7 @@ const tradeSignalSchema = new mongoose.Schema({
   resolvedAt: Date,
   binanceOrderId: String,
   quantityExecuted: String,
+  closeReason: String,
 });
 const TradeSignal: any = mongoose.models.TradeSignal || mongoose.model('TradeSignal', tradeSignalSchema);
 
@@ -90,7 +91,8 @@ const userTradeSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'live', 'win', 'loss', 'expired', 'closed'], default: 'pending' },
   isAuto: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
-  resolvedAt: Date
+  resolvedAt: Date,
+  closeReason: String
 });
 const UserTrade: any = mongoose.models.UserTrade || mongoose.model('UserTrade', userTradeSchema);
 
@@ -825,7 +827,7 @@ async function startServer() {
      if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'super_admin' && req.user.role !== 'pro') {
        return res.status(403).json({ error: 'Only PRO users and Admins can manage trades' });
      }
-     const { symbol } = req.body;
+     const { symbol, reason } = req.body;
      try {
        const userPaperTrade = await UserTrade.findOne({ userId: req.user._id, symbol, status: 'live', binanceOrderId: /^paper_/ });
        if (userPaperTrade) {
@@ -843,11 +845,19 @@ async function startServer() {
            userPaperTrade.status = 'closed';
            userPaperTrade.resolvedAt = new Date();
            userPaperTrade.realizedPnl = realizedPnl;
+           userPaperTrade.closeReason = reason || 'Manually closed by user';
            await userPaperTrade.save();
            return res.json({ success: true, message: `Closed Paper position. Realized PnL: $${realizedPnl.toFixed(2)}` });
        }
 
        const user = await User.findById(req.user._id);
+       const binanceTrade = await UserTrade.findOne({ userId: req.user._id, symbol, status: 'live' });
+       if(binanceTrade && reason) {
+           binanceTrade.closeReason = reason || 'Manually closed by user';
+           binanceTrade.status = 'closed'; // optimistic
+           binanceTrade.resolvedAt = new Date();
+           await binanceTrade.save();
+       }
        const apiKey = user?.binanceApiKey;
        const secretKey = user?.binanceSecretKey;
        const result = await closeBinancePosition(symbol, apiKey, secretKey);
@@ -861,13 +871,14 @@ async function startServer() {
      if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'super_admin') {
        return res.status(403).json({ error: 'Only Admins can manage auto trades' });
      }
-     const { tradeId } = req.body;
+     const { tradeId, reason } = req.body;
      try {
        const trade = await TradeSignal.findById(tradeId);
        if (!trade) return res.status(404).json({ error: 'Trade not found' });
        
        trade.status = 'loss'; // effectively cancelled or forced closed
        trade.resolvedAt = new Date();
+       trade.closeReason = reason || 'Manually closed by auto-trade admin';
        trade.amount = trade.amount || 0;
        
        let realizedPnl = 0;
@@ -1422,40 +1433,57 @@ async function startServer() {
                      }
                 }
                 
+                let closeReason = '';
                 if (signal.binanceOrderId) {
                      if (signal.trend === 'bullish') {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
                          if (progress >= 0.4 && signal.stopLoss < signal.entry * 1.001) {
                              signal.stopLoss = signal.entry * 1.002;
+                             closeReason += ' Trailed SL up. ';
                              signal.save().catch(()=>{});
                          }
                          if (currentPnl <= -10) {
                              outcome = 'loss';
                              pnl = -100 / 10; // -10% meaning 100% loss at 10x
-                         } else if (price >= signal.target || (progress >= 0.8 && currentPnl > +1)) {
+                             closeReason += 'Maximum loss threshold hit (-100%).';
+                         } else if (price >= signal.target) {
                              outcome = 'win';
                              pnl = (price - signal.entry) / signal.entry * 100;
+                             closeReason += 'Target price reached.';
+                         } else if (progress >= 0.8 && currentPnl > +1) {
+                             outcome = 'win';
+                             pnl = (price - signal.entry) / signal.entry * 100;
+                             closeReason += 'Auto-secured profit as price stalled near target.';
                          } else if (price <= signal.stopLoss) {
                              outcome = price > signal.entry ? 'win' : 'loss';
                              pnl = (price - signal.entry) / signal.entry * 100;
+                             closeReason += price > signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
                          }
                      } else if (signal.trend === 'bearish') {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
                          if (progress >= 0.4 && signal.stopLoss > signal.entry * 0.999) {
                              signal.stopLoss = signal.entry * 0.998;
+                             closeReason += ' Trailed SL down. ';
                              signal.save().catch(()=>{});
                          }
                          if (currentPnl <= -10) {
                              outcome = 'loss';
                              pnl = -100 / 10;
-                         } else if (price <= signal.target || (progress >= 0.8 && currentPnl > +1)) {
+                             closeReason += 'Maximum loss threshold hit (-100%).';
+                         } else if (price <= signal.target) {
                              outcome = 'win';
                              pnl = (signal.entry - price) / signal.entry * 100;
+                             closeReason += 'Target price reached.';
+                         } else if (progress >= 0.8 && currentPnl > +1) {
+                             outcome = 'win';
+                             pnl = (signal.entry - price) / signal.entry * 100;
+                             closeReason += 'Auto-secured profit as price stalled near target.';
                          } else if (price >= signal.stopLoss) {
                              outcome = price < signal.entry ? 'win' : 'loss';
                              pnl = (signal.entry - price) / signal.entry * 100;
+                             closeReason += price < signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
                          }
                     }
                 }
@@ -1510,24 +1538,33 @@ async function startServer() {
                  let realizedPnl = 0;
                  
                  let userProgress = 0;
+                 let closeReason = '';
                  if (ut.side === 'BUY') {
                      let currentPnl = (price - entry) / entry * ut.amount * 10;
                      if (target) userProgress = (price - entry) / (target - entry);
                      
                      if (userProgress >= 0.4 && ut.stopLoss < entry * 1.001) {
                          ut.stopLoss = entry * 1.002;
+                         closeReason += ' Trailed SL up. ';
                          ut.save().catch(()=>{});
                      }
                      
                      if (currentPnl <= -10) {
                          outcome = 'loss';
                          realizedPnl = -10;
-                     } else if (target && (price >= target || (userProgress >= 0.8 && currentPnl > +1))) {
+                         closeReason += 'Maximum loss threshold hit (-100%).';
+                     } else if (target && price >= target) {
                          outcome = 'win';
                          realizedPnl = (price - entry) / entry * ut.amount * 10;
+                         closeReason += 'Target price reached.';
+                     } else if (target && userProgress >= 0.8 && currentPnl > +1) {
+                         outcome = 'win';
+                         realizedPnl = (price - entry) / entry * ut.amount * 10;
+                         closeReason += 'Auto-secured profit as price stalled near target.';
                      } else if (ut.stopLoss && price <= ut.stopLoss) {
                          outcome = price > entry ? 'win' : 'loss';
                          realizedPnl = (price - entry) / entry * ut.amount * 10;
+                         closeReason += price > entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
                      }
                  } else if (ut.side === 'SELL') {
                      let currentPnl = (entry - price) / entry * ut.amount * 10;
@@ -1535,17 +1572,25 @@ async function startServer() {
                      
                      if (userProgress >= 0.4 && ut.stopLoss > entry * 0.999) {
                          ut.stopLoss = entry * 0.998;
+                         closeReason += ' Trailed SL down. ';
                          ut.save().catch(()=>{});
                      }
                      if (currentPnl <= -10) {
                          outcome = 'loss';
                          realizedPnl = -10;
-                     } else if (target && (price <= target || (userProgress >= 0.8 && currentPnl > +1))) {
+                         closeReason += 'Maximum loss threshold hit (-100%).';
+                     } else if (target && price <= target) {
                          outcome = 'win';
                          realizedPnl = (entry - price) / entry * ut.amount * 10;
+                         closeReason += 'Target price reached.';
+                     } else if (target && userProgress >= 0.8 && currentPnl > +1) {
+                         outcome = 'win';
+                         realizedPnl = (entry - price) / entry * ut.amount * 10;
+                         closeReason += 'Auto-secured profit as price stalled near target.';
                      } else if (ut.stopLoss && price >= ut.stopLoss) {
                          outcome = price < entry ? 'win' : 'loss';
                          realizedPnl = (entry - price) / entry * ut.amount * 10;
+                         closeReason += price < entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
                      }
                  }
                  
@@ -1553,6 +1598,7 @@ async function startServer() {
                      ut.status = 'closed';
                      ut.realizedPnl = realizedPnl;
                      ut.resolvedAt = new Date();
+                     ut.closeReason = closeReason;
                      await ut.save();
                      console.log(`[User-Paper] Auto-closed ${ut.side} ${ut.symbol} for user ${ut.userId}: ${outcome.toUpperCase()} ($${realizedPnl.toFixed(2)})`);
                  }
