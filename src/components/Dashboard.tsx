@@ -1212,6 +1212,12 @@ plot(close)"
                                      <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]">
                                         <span>Started: {new Date(trade.createdAt).toLocaleString()}</span>
                                      </div>
+                                     {trade.setupData && trade.setupData.reasoning && (
+                                       <div className="mt-2 p-2 bg-[rgba(41,98,255,0.05)] border border-[rgba(41,98,255,0.2)] rounded text-[10px] text-[#b2b5be] leading-relaxed">
+                                          <div className="flex items-center gap-1 mb-1 text-[#2962ff] font-bold uppercase"><Brain className="w-3 h-3"/> AI Rationale</div>
+                                          {trade.setupData.reasoning}
+                                       </div>
+                                     )}
                                      <div className="flex justify-between items-center w-full mt-1">
                                        <span className="text-[10px] text-[#787b86]">Amt: ${trade.amount}</span>
                                        {trade.unrealizedPnl !== undefined && (
@@ -1283,6 +1289,12 @@ plot(close)"
                                         <span className="text-xs text-[#787b86]">Realized:</span>
                                         <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
                                      </div>
+                                     {trade.setupData && trade.setupData.reasoning && (
+                                       <div className="mt-2 p-2 bg-[rgba(41,98,255,0.05)] border border-[rgba(41,98,255,0.2)] rounded text-[10px] text-[#b2b5be] leading-relaxed">
+                                          <div className="flex items-center gap-1 mb-1 text-[#2962ff] font-bold uppercase"><Brain className="w-3 h-3"/> AI Rationale</div>
+                                          {trade.setupData.reasoning}
+                                       </div>
+                                     )}
                                   </div>
                                ))}
                              </div>
