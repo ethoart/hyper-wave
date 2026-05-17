@@ -269,6 +269,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // If price is already moving from W4 towards target, entry is current price
         if (currentPrice > w4 && currentPrice < finalTarget) {
             suggestedEntry = currentPrice;
+            // Check if we are too late to the trade (price moved more than 30% towards target)
+            const moveDone = (currentPrice - w4) / (finalTarget - w4);
+            if (moveDone > 0.3) {
+                isInvalidated = true; // Too late, missed the run
+            }
         } else if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }
@@ -382,6 +387,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // If price is already moving from W4 towards target, entry is current price
         if (currentPrice < w4 && currentPrice > finalTarget) {
             suggestedEntry = currentPrice;
+            // Check if we are too late to the trade (price moved more than 30% towards target)
+            const moveDone = (w4 - currentPrice) / (w4 - finalTarget);
+            if (moveDone > 0.3) {
+                isInvalidated = true; // Too late, missed the run
+            }
         } else if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
         }

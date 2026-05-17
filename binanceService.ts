@@ -213,6 +213,16 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
   try {
     // We check the open positions first to determine position direction and amount
     const baseUrl = getBaseUrl();
+    
+    // First, cancel all open orders for this symbol to avoid reduceOnly rejections
+    let cancelQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+    const cancelSig = createSignature(cancelQuery, secretKey);
+    cancelQuery += `&signature=${cancelSig}`;
+    
+    await axios.delete(`${baseUrl}/fapi/v1/allOpenOrders?${cancelQuery}`, {
+      headers: { 'X-MBX-APIKEY': apiKey }
+    }).catch(e => console.warn(`[Binance] Cancel open orders ignored for ${symbol}`));
+
     const positionUrl = `${baseUrl}/fapi/v2/positionRisk?${queryString}`;
     const positionRes = await axios.get(positionUrl, {
       headers: { 'X-MBX-APIKEY': apiKey },
