@@ -1273,6 +1273,7 @@ async function startServer() {
               let recommendedAmount = tradeAmountDollars;
 
                if (entryDiff < 0.15 && projectedProfit >= 1.0) {
+                 algoResult.timeframe = scanInterval;
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -1284,7 +1285,9 @@ async function startServer() {
                    amount: recommendedAmount,
                    reasoning: algoResult.reasoning,
                    currentPrice: currentPrice,
-                   projectedProfit
+                   projectedProfit,
+                   termStyle: algoResult.termStyle,
+                   setupData: algoResult
                  });
                  console.log(`[Auto-Scan] Found actionable trade for ${pair.symbol} (Proj. Pnl: $${projectedProfit.toFixed(2)})`);
               }
@@ -1358,7 +1361,7 @@ async function startServer() {
                            amount: finalAmount,
                            expiresAt,
                            termStyle: alert.termStyle,
-                           setupData: { reasoning: alert.reasoning, params: alert }
+                           setupData: alert.setupData
                        });
 
 
