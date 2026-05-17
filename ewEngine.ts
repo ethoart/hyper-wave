@@ -132,6 +132,10 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
   let bestSetup: any = null;
   let highestScore = -999999;
+  
+  if (tradeStyle === "SCALP TRADE" && confirmations.length < 2) {
+       return null; // Enforce multiple confirmations for scalps
+  }
 
   // Find optimal parameters learned from ML, otherwise default
   const idealRetrace2 = mlParams?.retrace2 || 0.618;
