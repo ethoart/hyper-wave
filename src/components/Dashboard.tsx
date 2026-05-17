@@ -875,12 +875,10 @@ export function Dashboard() {
            </div>
 
            <button onClick={() => setActiveTool('trend')} title="Trend Line" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'trend' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><TrendingUp className="w-5 h-5" /></button>
-           <button onClick={() => setActiveTool('fibonacci')} title="Fibonacci Retracement" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'fibonacci' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><AlignJustify className="w-5 h-5" /></button>
            <button onClick={() => setActiveTool('parallel')} title="Parallel Channel" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'parallel' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Spline className="w-5 h-5" /></button>
            <button onClick={() => setActiveTool('rectangle')} title="Rectangle" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'rectangle' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Square className="w-5 h-5" /></button>
-           <button onClick={() => setActiveTool('measure')} title="Measure & Percentage" className={`p-1.5 flex-shrink-0 md:p-2 rounded ${activeTool === 'measure' ? 'text-[#2962ff] bg-[#2a2e39]' : 'text-[#787b86] hover:text-[#d1d4dc]'}`}><Ruler className="w-5 h-5" /></button>
            
-           {['pen', 'trend', 'fibonacci', 'parallel', 'rectangle', 'measure'].includes(activeTool) && (
+           {['pen', 'trend', 'parallel', 'rectangle'].includes(activeTool) && (
               <div className="flex flex-row md:flex-col gap-1.5 items-center p-1 bg-[#1e222d] border border-[#2a2e39] rounded mt-2">
                 {['#2962ff', '#e2e8f0', '#f23645', '#089981', '#f59e0b'].map(c => (
                   <button key={c} onClick={() => setDrawingColor(c)} style={{backgroundColor: c}} className={`w-3.5 h-3.5 rounded-full ${drawingColor === c ? 'ring-2 ring-white/50' : ''}`}/>
@@ -1230,7 +1228,7 @@ plot(close)"
                                         <span className="text-xs text-[#f23645]">SL: {trade.stopLoss}</span>
                                      </div>
                                      <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]">
-                                        <span>Started: {new Date(trade.createdAt).toLocaleString()}</span>
+                                        <span>Started: {new Date(trade.timestamp).toLocaleString()}</span>
                                      </div>
                                      {trade.setupData && trade.setupData.reasoning && (
                                        <div className="mt-2 p-2 bg-[rgba(41,98,255,0.05)] border border-[rgba(41,98,255,0.2)] rounded text-[10px] text-[#b2b5be] leading-relaxed">
@@ -1299,7 +1297,7 @@ plot(close)"
                                         <span>Exit: {trade.status === 'win' ? trade.target : trade.status === 'loss' ? trade.stopLoss : 'Manual'}</span>
                                      </div>
                                      <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]" onClick={() => setSymbol(trade.symbol)}>
-                                        <span>Started: {new Date(trade.createdAt).toLocaleString()}</span>
+                                        <span>Started: {new Date(trade.timestamp).toLocaleString()}</span>
                                      </div>
                                      {trade.resolvedAt && (
                                      <div className="flex justify-between items-center w-full mb-1 text-[10px] text-[#787b86]" onClick={() => setSymbol(trade.symbol)}>

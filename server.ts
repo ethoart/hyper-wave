@@ -1254,15 +1254,13 @@ async function startServer() {
               }
 
               let recommendedAmount = tradeAmountDollars;
-              if (rawLossUsdt > 4.5) {
-                   // reduce position size to cap risk at $4.50
-                   recommendedAmount = (4.5 / rawLossUsdt) * tradeAmountDollars;
-              } else if (rawLossUsdt < 1.0) {
-                   // increase position size to risk at least $1.00
-                   recommendedAmount = Math.min((1.0 / rawLossUsdt) * tradeAmountDollars, 20); // max scale up
-              }
+              if (rawLossUsdt > 6.0) {
+                    recommendedAmount = (6.0 / rawLossUsdt) * tradeAmountDollars;
+               } else if (rawLossUsdt < 2.0) {
+                    recommendedAmount = Math.min((2.0 / rawLossUsdt) * tradeAmountDollars, 40);
+               }
 
-              if (entryDiff < 0.15 && projectedProfit >= 0.1) {
+               if (entryDiff < 0.15 && projectedProfit >= 5.0) {
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -1306,19 +1304,19 @@ async function startServer() {
                        symbol: alert.symbol,
                        $or: [
                            { status: { $in: ['pending', 'live'] } },
-                           { createdAt: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } }
+                           { createdAt: { $gte: new Date(Date.now() - 30 * 60 * 1000) } }
                        ]
                    });
-                   if (!existing && activeCount < 3) {
-                       let currentBudget = engineCfg.autoBotBalance || 100;
+                   if (!existing && activeCount < 10) {
+                       let currentBudget = engineCfg.autoBotBalance || 500;
                        if (currentBudget <= 5) {
-                           currentBudget = 100; // Reset budget
-                           engineCfg.autoBotBalance = 100;
+                           currentBudget = 500; // Reset budget
+                           engineCfg.autoBotBalance = 500;
                            await engineCfg.save();
                        }
                        
-                       // Full budget allocation per trade, but we divide by 3 to allow max 3 concurrent trades
-                       const tradeAmountDollars = +(currentBudget / 3).toFixed(2);
+                       // Full budget allocation per trade, but we divide by 5 to allow max 10 concurrent trades
+                       const tradeAmountDollars = +(currentBudget / 5).toFixed(2);
                        const leverage = 10;
                        
                        let activePosSize = tradeAmountDollars * leverage;

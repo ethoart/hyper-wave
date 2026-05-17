@@ -169,7 +169,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
     const entry = data[len-1].close;
     
-    let target = isBull ? entry * 1.05 : entry * 0.95;
+    let target = isBull ? entry * 1.10 : entry * 0.90;
     let stop = isBull ? entry * 0.97 : entry * 1.03; // Simple 3% risk
 
     // Enforce 2% to 5% risk bound
@@ -274,15 +274,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage (i.e. 2% to 5% max risk)
-        const minSL_price = suggestedEntry * (1 - 0.05); // Max 5% drop
-        const maxSL_price = suggestedEntry * (1 - 0.02); // Min 2% drop
+        const minSL_price = suggestedEntry * (1 - 0.08); // Max 5% drop
+        const maxSL_price = suggestedEntry * (1 - 0.03); // Min 2% drop
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
 
         // Enforce target to be a reasonable Risk/Reward (at least 1.5x up to 4x)
         let finalTargetCopy = finalTarget;
-        const minTarget = suggestedEntry * (1 + 0.03); // Min 3% move
-        const maxTarget = suggestedEntry * (1 + 0.15); // Max 15% move
+        const minTarget = suggestedEntry * (1 + 0.10); // Min 3% move
+        const maxTarget = suggestedEntry * (1 + 0.20); // Max 15% move
         if (finalTargetCopy < minTarget) finalTargetCopy = minTarget;
         if (finalTargetCopy > maxTarget) finalTargetCopy = maxTarget;
         
@@ -387,15 +387,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage
-        const maxSL_price = suggestedEntry * (1 + 0.05); // Max 5% climb (costs $5)
-        const minSL_price = suggestedEntry * (1 + 0.02); // Min 2% climb (costs $2)
+        const maxSL_price = suggestedEntry * (1 + 0.08); // Max 8% climb
+        const minSL_price = suggestedEntry * (1 + 0.03); // Min 3% climb
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
 
         // Enforce target to be a reasonable Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget_b = suggestedEntry * (1 - 0.03); // Min 3% drop
-        const maxTarget_b = suggestedEntry * (1 - 0.15); // Max 15% drop
+        const minTarget_b = suggestedEntry * (1 - 0.10); // Min 3% drop
+        const maxTarget_b = suggestedEntry * (1 - 0.20); // Max 15% drop
         if (finalTargetCopy > minTarget_b) finalTargetCopy = minTarget_b;
         if (finalTargetCopy < maxTarget_b) finalTargetCopy = maxTarget_b;
 
@@ -443,7 +443,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const len = data.length;
     const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
     const entry = data[len-1].close;
-    const target = isBull ? entry * 1.05 : entry * 0.95;
+    const target = isBull ? entry * 1.10 : entry * 0.90;
     let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
 
     // Enforce 2% to 5% risk bound

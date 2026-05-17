@@ -706,7 +706,7 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
       }
     });
 
-    const drawingTools = ['pen', 'trend', 'fibonacci', 'parallel', 'rectangle', 'measure'];
+    const drawingTools = ['pen', 'trend', 'parallel', 'rectangle'];
     if (drawingTools.includes(activeTool as string)) {
       chart.applyOptions({
         handleScroll: false,
