@@ -1585,7 +1585,7 @@ plot(close)"
                              <label className="block text-xs text-[#787b86] mb-2 mt-4 uppercase font-bold">Trade Size (USD)</label>
                              <input 
                                type="number" 
-                               value={adminConfig.tradeAmountFixed || 15}
+                               value={adminConfig.tradeAmountFixed || 10}
                                onChange={(e) => saveAdminConfig('tradeAmountFixed', Number(e.target.value))}
                                className="w-full bg-[#2a2e39] text-white text-sm border border-[#363a45] rounded p-2 outline-none focus:border-[#2962ff] mb-4"
                              />

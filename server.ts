@@ -1271,13 +1271,8 @@ async function startServer() {
               }
 
               let recommendedAmount = tradeAmountDollars;
-              if (rawLossUsdt > 6.0) {
-                    recommendedAmount = (6.0 / rawLossUsdt) * tradeAmountDollars;
-               } else if (rawLossUsdt < 2.0) {
-                    recommendedAmount = Math.min((2.0 / rawLossUsdt) * tradeAmountDollars, 40);
-               }
 
-               if (entryDiff < 0.15 && projectedProfit >= 5.0) {
+               if (entryDiff < 0.15 && projectedProfit >= 1.0) {
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -1347,11 +1342,6 @@ async function startServer() {
                        }
 
                        let finalAmount = tradeAmountDollars;
-                       if (activeRawLoss > 4.5) {
-                           finalAmount = (4.5 / activeRawLoss) * tradeAmountDollars;
-                       } else if (activeRawLoss < 1.0) {
-                           finalAmount = Math.min((1.0 / activeRawLoss) * tradeAmountDollars, 20);
-                       }
                        activePosSize = finalAmount * leverage;
 
                        const expiresAt = new Date(Date.now() + (alert.termStyle === 'SHORT_TERM' ? 2 : 12) * 60 * 60 * 1000);
