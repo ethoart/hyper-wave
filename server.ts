@@ -14,6 +14,21 @@ import { placeBinanceTrade, closeBinancePosition, getBinanceBalance, getBinanceP
 
 dotenv.config();
 
+const sendNotification = async (cfg: any, msg: string) => {
+   if (!cfg) return;
+   if (cfg.telegramBotToken && cfg.telegramUserId) {
+       try {
+           await axios.post(`https://api.telegram.org/bot${cfg.telegramBotToken}/sendMessage`, {
+               chat_id: cfg.telegramUserId,
+               text: msg,
+               parse_mode: 'HTML'
+           });
+       } catch(e) {
+           console.error('Telegram notification failed');
+       }
+   }
+};
+
 // Extend Express typical Request to have session with userId
 declare module 'express-session' {
   interface SessionData {
@@ -704,7 +719,14 @@ async function startServer() {
       let engineCfg = await EngineConfig.findOne({ id: 'global' });
       let autoBotBalance = engineCfg?.autoBotBalance || 100;
 
-      res.json({ pending, closed, balance, livePositions, autoBotBalance });
+      const userTradesForStats = await UserTrade.find({ userId: req.user._id, status: 'closed' });
+      const stats = {
+          total: userTradesForStats.length,
+          wins: userTradesForStats.filter((t: any) => t.realizedPnl > 0).length,
+          losses: userTradesForStats.filter((t: any) => t.realizedPnl <= 0).length,
+      };
+
+      res.json({ pending, closed, balance, livePositions, autoBotBalance, stats });
     } catch(err) {
       res.status(500).json({ error: 'Failed to fetch trades' });
     }
@@ -769,12 +791,16 @@ async function startServer() {
         executedPrice = parseFloat(tickRes.data.price);
         const qty = parseFloat(amount) / executedPrice * parseFloat(leverage || '1');
         
-        try {
-            const apiRes = await placeBinanceTrade(symbol, side, qty, 'MARKET', stopLoss ? parseFloat(stopLoss) : undefined, takeProfit ? parseFloat(takeProfit) : undefined, apiKey, apiSecret);
-            orderTrackingId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
-        } catch(e: any) {
-            console.warn(`[Binance] Manual trade failed, falling back to Paper:`, e.message);
+        if (req.user.role === 'pro') {
             orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        } else {
+            try {
+                const apiRes = await placeBinanceTrade(symbol, side, qty, 'MARKET', stopLoss ? parseFloat(stopLoss) : undefined, takeProfit ? parseFloat(takeProfit) : undefined, apiKey, apiSecret);
+                orderTrackingId = apiRes.orderId ? apiRes.orderId.toString() : apiRes.clientOrderId;
+            } catch(e: any) {
+                console.warn(`[Binance] Manual trade failed, falling back to Paper:`, e.message);
+                orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+            }
         }
         
         const newTrade = await UserTrade.create({
@@ -1164,10 +1190,9 @@ async function startServer() {
       
       for (const pair of topPairs) {
          try {
-            // PRO User Custom Algos
-            if (isDbConnected) {
+                // PRO User Custom Algos (Only PRO users - Admins use mathematical)
                 const evalProUsers = await (User as any).find({ 
-                   role: { $in: ['pro', 'admin', 'super_admin'] }, 
+                   role: 'pro', 
                    useCustomAlgo: true, 
                    pineCode: { $exists: true, $ne: '' }
                 });
@@ -1182,14 +1207,8 @@ async function startServer() {
                          const positionSizeUsdt = (result.amount || 10) * leverage;
                          const quantity = +(positionSizeUsdt / currentPrice).toFixed(4);
                          try { await setBinanceLeverage(pair.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
-                         let orderTrackingId = '';
-                         try {
-                             const res = await placeBinanceTrade(pair.symbol, side, quantity, 'MARKET', result.stopLoss, result.target, pUser.binanceApiKey, pUser.binanceSecretKey);
-                             orderTrackingId = res.orderId?.toString() || res.clientOrderId?.toString() || 'unknown';
-                         } catch (e: any) {
-                             console.warn(`[Binance] PRO Custom Algo failed, falling back to Paper:`, e.message);
-                             orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-                         }
+                         // PRO Users exclusively paper trade customized setup
+                         let orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
                          await UserTrade.create({
                             userId: pUser._id,
                             symbol: pair.symbol,
@@ -1206,9 +1225,8 @@ async function startServer() {
                      // Ignore individual user script errors
                    }
                 }
-            }
 
-           // Get dynamic parameters
+            // Get dynamic parameters
            let mlParams = null;
            let currentModel = 'AUTO_OPTIMIZED';
            if (isDbConnected) {
@@ -1244,6 +1262,7 @@ async function startServer() {
                    if (!bestAlgoResult || algoResult.gainPct > bestAlgoResult.gainPct) {
                        bestAlgoResult = algoResult;
                        bestAlgoResult.currentPrice = chartData[chartData.length - 1].close;
+                       bestAlgoResult.scanInterval = scanInterval;
                    }
                }
                await new Promise(r => setTimeout(r, 200));
@@ -1273,7 +1292,7 @@ async function startServer() {
               let recommendedAmount = tradeAmountDollars;
 
                if (entryDiff < 0.15 && projectedProfit >= 1.0) {
-                 algoResult.timeframe = scanInterval;
+                 algoResult.timeframe = algoResult.scanInterval || '1h';
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
                    symbol: pair.symbol,
@@ -1439,12 +1458,16 @@ async function startServer() {
                                            const userQuantity = +(userPosSizeUsdt / price).toFixed(4);
                                            try { await setBinanceLeverage(signal.symbol, leverage, pUser.binanceApiKey, pUser.binanceSecretKey); } catch(e) {}
                                            let orderTrackingId = '';
-                                           try {
-                                               const res = await placeBinanceTrade(signal.symbol, side, userQuantity, 'MARKET', signal.stopLoss, signal.target, pUser.binanceApiKey, pUser.binanceSecretKey);
-                                               orderTrackingId = res.orderId?.toString() || res.clientOrderId?.toString() || 'unknown';
-                                           } catch(e: any) {
-                                               console.warn(`[Binance] PRO Default Algo failed, falling back to Paper:`, e.message);
+                                           if (pUser.role === 'pro') {
                                                orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+                                           } else {
+                                               try {
+                                                   const res = await placeBinanceTrade(signal.symbol, side, userQuantity, 'MARKET', signal.stopLoss, signal.target, pUser.binanceApiKey, pUser.binanceSecretKey);
+                                                   orderTrackingId = res.orderId?.toString() || res.clientOrderId?.toString() || 'unknown';
+                                               } catch(e: any) {
+                                                   console.warn(`[Binance] PRO Default Algo failed, falling back to Paper:`, e.message);
+                                                   orderTrackingId = `paper_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+                                               }
                                            }
                                            await UserTrade.create({
                                               userId: pUser._id,

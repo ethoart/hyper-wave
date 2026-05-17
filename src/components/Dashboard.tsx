@@ -102,6 +102,7 @@ export function Dashboard() {
   const [openTrades, setOpenTrades] = useState<any[]>([]);
   const [closedTrades, setClosedTrades] = useState<any[]>([]);
   const [livePositions, setLivePositions] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState<{ total: number, wins: number, losses: number } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -569,6 +570,7 @@ export function Dashboard() {
       setOpenTrades(res.data.pending);
       setClosedTrades(res.data.closed);
       if (res.data.livePositions) setLivePositions(res.data.livePositions);
+      if (res.data.stats) setUserStats(res.data.stats);
       if (res.data.balance !== undefined) setBinanceBalance(res.data.balance);
       if (res.data.autoBotBalance !== undefined) setAutoBotBalance(res.data.autoBotBalance);
     } catch(err) {
@@ -1506,11 +1508,92 @@ plot(close)"
                       </div>
 
                       <div className="border-t border-[#2a2e39] pt-6">
-                         <h3 className="text-white font-bold mb-4">Pro Subscription</h3>
+                         <h3 className="text-white font-bold mb-4">Pro Subscription & Stats</h3>
                          {(user?.role === 'pro' || user?.role === 'admin' || user?.role === 'super_admin') ? (
                            <div className="bg-[#2962ff]/10 border border-[#2962ff] p-4 rounded text-[#d1d4dc] text-sm">
-                             <div className="text-[#2962ff] font-bold mb-1">PRO Active</div>
-                             You currently have PRO access.
+                             <div className="text-[#2962ff] font-bold mb-3">PRO Active</div>
+                             <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                                <div className="bg-[#1e222d] border border-[#2962ff]/20 p-2 rounded">
+                                   <div className="text-xs text-[#787b86] uppercase mb-1">Total Trades</div>
+                                   <div className="text-white font-bold">{userStats?.total || 0}</div>
+                                </div>
+                                <div className="bg-[#1e222d] border border-[#089981]/20 p-2 rounded">
+                                   <div className="text-xs text-[#787b86] uppercase mb-1">Wins</div>
+                                   <div className="text-[#089981] font-bold">{userStats?.wins || 0}</div>
+                                </div>
+                                <div className="bg-[#1e222d] border border-[#f23645]/20 p-2 rounded">
+                                   <div className="text-xs text-[#787b86] uppercase mb-1">Losses</div>
+                                   <div className="text-[#f23645] font-bold">{userStats?.losses || 0}</div>
+                                </div>
+                             </div>
+                             <div className="text-xs text-[#787b86] mt-4">You currently have PRO access.</div>
+                             
+                             {user?.role === 'pro' && (
+                               <div className="mt-4 pt-4 border-t border-[#2962ff]/20">
+                                  <div className="flex items-center justify-between mb-2">
+                                     <div className="font-bold text-white text-xs uppercase">Custom Trading Strategy</div>
+                                     <label className="flex items-center cursor-pointer">
+                                        <div className="relative">
+                                           <input 
+                                             type="checkbox" 
+                                             className="sr-only"
+                                             checked={user?.useCustomAlgo || false} 
+                                             onChange={async (e) => {
+                                                const checked = e.target.checked;
+                                                try {
+                                                  await axios.put('/api/users/settings', { useCustomAlgo: checked });
+                                                  window.location.reload();
+                                                } catch(err) {}
+                                             }}
+                                           />
+                                           <div className={`block w-10 h-6 rounded-full ${user?.useCustomAlgo ? 'bg-[#2962ff]' : 'bg-[#2a2e39]'}`}></div>
+                                           <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${user?.useCustomAlgo ? 'translate-x-4' : ''}`}></div>
+                                        </div>
+                                     </label>
+                                  </div>
+                                  <p className="text-[10px] text-[#787b86] mb-2 leading-relaxed">
+                                     Upload or write your own trading script (PineScript syntax approximation). This algorithm will be used for your paper trading.
+                                  </p>
+                                  
+                                  {user?.useCustomAlgo && (
+                                     <div className="mt-2 text-right relative">
+                                        <label className="absolute right-2 top-2 cursor-pointer bg-[#2962ff] text-white text-[9px] px-2 py-1 rounded hover:bg-[#1e53e5]">
+                                           Upload File
+                                           <input 
+                                             type="file" 
+                                             accept=".txt, .pine, .js" 
+                                             className="hidden" 
+                                             onChange={(e) => {
+                                               const file = e.target.files?.[0];
+                                               if (file) {
+                                                  const reader = new FileReader();
+                                                  reader.onload = async (event) => {
+                                                     try {
+                                                       await axios.put('/api/users/settings', { pineCode: event.target?.result as string });
+                                                       window.location.reload();
+                                                     } catch(err) {}
+                                                  };
+                                                  reader.readAsText(file);
+                                               }
+                                             }}
+                                           />
+                                        </label>
+                                        <textarea
+                                           className="w-full h-32 bg-[#1e222d] border border-[#2962ff]/30 rounded p-2 pt-8 text-[10px] text-[#089981] font-mono focus:border-[#2962ff] outline-none mb-2"
+                                           placeholder="Enter custom strategy logic here..."
+                                           defaultValue={user?.pineCode || ''}
+                                           onBlur={async (e) => {
+                                              try {
+                                                 await axios.put('/api/users/settings', { pineCode: e.target.value });
+                                                 window.location.reload();
+                                              } catch(err) {}
+                                           }}
+                                        ></textarea>
+                                        <span className="text-[10px] text-[#787b86]">Code saves automatically on blur.</span>
+                                     </div>
+                                  )}
+                               </div>
+                             )}
                            </div>
                          ) : (
                            <div className="bg-[#131722] border border-[#2a2e39] p-4 rounded text-[#d1d4dc] text-sm">
