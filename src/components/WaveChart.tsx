@@ -755,7 +755,8 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                     seenTimes.add(p.time);
                     uniquePts.push(p);
                  } else {
-                    const newTime = (p.time as number) + 0.001;
+                    let newTime = (p.time as number) + 1;
+                    while(seenTimes.has(newTime)) newTime += 1;
                     seenTimes.add(newTime);
                     uniquePts.push({ ...p, time: newTime });
                  }
@@ -898,7 +899,8 @@ export function WaveChart({ data, symbol, interval, liveCandle, entryPoint, exit
                     seenTimes.add(p.time);
                     uniquePts.push(p);
                  } else {
-                    const newTime = (p.time as number) + 0.001;
+                    let newTime = (p.time as number) + 1;
+                    while(seenTimes.has(newTime)) newTime += 1;
                     seenTimes.add(newTime);
                     uniquePts.push({ ...p, time: newTime });
                  }

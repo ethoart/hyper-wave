@@ -105,6 +105,7 @@ export function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'admin'>('profile');
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [adminConfig, setAdminConfig] = useState<any>({});
   const [binanceBalance, setBinanceBalance] = useState<number | null>(null);
   const [autoBotBalance, setAutoBotBalance] = useState<number | null>(null);
 
@@ -532,8 +533,26 @@ export function Dashboard() {
   useEffect(() => {
     if (showSettings && settingsTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin')) {
       fetchUsers();
+      fetchAdminConfig();
     }
   }, [showSettings, settingsTab]);
+
+  const fetchAdminConfig = async () => {
+     try {
+       const res = await axios.get('/api/admin/config');
+       setAdminConfig(res.data);
+     } catch(e) {}
+  };
+
+  const saveAdminConfig = async (key: string, value: any) => {
+     try {
+       await axios.post('/api/admin/config', { [key]: value });
+       setAdminConfig({ ...adminConfig, [key]: value });
+       addNotification("Bot config saved.");
+     } catch(e: any) {
+        alert(e.response?.data?.error || e.message);
+     }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -1636,7 +1655,28 @@ plot(close)"
                          </div>
                       </div>
 
-                      <div className="border-t border-[#2a2e39] pt-6 mt-6">
+                      <div className="border-t border-[#2a2e39] pt-6 mt-6 pb-6">
+                         <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                            <Settings className="w-4 h-4 text-[#089981]" />
+                            Global Trade Bot Settings
+                         </h3>
+                         <div className="bg-[#131722] p-4 border border-[#2a2e39] rounded">
+                             <label className="block text-xs text-[#787b86] mb-2 uppercase font-bold">Auto-Trade Strategy Model</label>
+                             <select 
+                                value={adminConfig.tradingModel || 'AUTO_OPTIMIZED'} 
+                                onChange={(e) => saveAdminConfig('tradingModel', e.target.value)}
+                                className="w-full bg-[#2a2e39] text-white text-sm border border-[#363a45] rounded p-2 outline-none focus:border-[#2962ff]"
+                             >
+                                <option value="SCALP">SCALP (15m Interval - High frequency, small gains)</option>
+                                <option value="DAY_TRADE">DAY TRADE (1h Interval - Balanced)</option>
+                                <option value="LONG_TERM">LONG TERM (4h Interval - Structural swings)</option>
+                                <option value="AUTO_OPTIMIZED">AUTO OPTIMIZED (Dynamic Selection via Gemini AI & Stats)</option>
+                             </select>
+                             <p className="text-[#a3a6af] text-[10px] mt-2">Changes apply to the next automatic engine scan cycle (every 2 mins).</p>
+                         </div>
+                      </div>
+
+                      <div className="border-t border-[#2a2e39] pt-6 mt-0">
                          <h3 className="text-white font-bold mb-4 flex items-center gap-2">
                             <TrendingUp className="w-4 h-4 text-[#2962ff]" />
                             AI Engine Optimizer

@@ -101,6 +101,7 @@ const engineConfigSchema = new mongoose.Schema({
   params: mongoose.Schema.Types.Mixed,
   insights: String,
   autoBotBalance: { type: Number, default: 100 },
+  tradingModel: { type: String, default: 'AUTO_OPTIMIZED' },
   updatedAt: { type: Date, default: Date.now }
 });
 const EngineConfig: any = mongoose.models.EngineConfig || mongoose.model('EngineConfig', engineConfigSchema);
@@ -1190,26 +1191,50 @@ async function startServer() {
                 }
             }
 
-           const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=1h&limit=200`);
-           const chartData = klinesRes.data.map((d: any) => ({
-             time: d[0],
-             open: parseFloat(d[1]),
-             high: parseFloat(d[2]),
-             low: parseFloat(d[3]),
-             close: parseFloat(d[4]),
-             volume: parseFloat(d[5]),
-           }));
-           
            // Get dynamic parameters
            let mlParams = null;
+           let currentModel = 'AUTO_OPTIMIZED';
            if (isDbConnected) {
                const config = await EngineConfig.findOne({ id: 'global' });
-               if (config) mlParams = config.params;
+               if (config) {
+                   mlParams = config.params;
+                   if (config.tradingModel) currentModel = config.tradingModel;
+               }
            }
            
-           const algoResult = analyzeElliottWaves(chartData, '1h', mlParams);
+           let intervalsToScan = ['1h'];
+           if (currentModel === 'SCALP') intervalsToScan = ['15m'];
+           else if (currentModel === 'DAY_TRADE') intervalsToScan = ['1h'];
+           else if (currentModel === 'LONG_TERM') intervalsToScan = ['4h'];
+           else if (currentModel === 'AUTO_OPTIMIZED') intervalsToScan = ['15m', '1h', '4h'];
+           
+           let bestAlgoResult = null;
+           for (const scanInterval of intervalsToScan) {
+               const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=${scanInterval}&limit=200`);
+               const chartData = klinesRes.data.map((d: any) => ({
+                 time: d[0],
+                 open: parseFloat(d[1]),
+                 high: parseFloat(d[2]),
+                 low: parseFloat(d[3]),
+                 close: parseFloat(d[4]),
+                 volume: parseFloat(d[5]),
+               }));
+               
+               const algoResult = analyzeElliottWaves(chartData, scanInterval, mlParams);
+               if (algoResult && algoResult.trend !== 'neutral') {
+                   // AUTO OPTIMIZED: pick highest statistical probability (score) or lowest risk
+                   // For now, let's favor higher gain potential or simply the best we find
+                   if (!bestAlgoResult || algoResult.gainPct > bestAlgoResult.gainPct) {
+                       bestAlgoResult = algoResult;
+                       bestAlgoResult.currentPrice = chartData[chartData.length - 1].close;
+                   }
+               }
+               await new Promise(r => setTimeout(r, 200));
+           }
+
+           const algoResult = bestAlgoResult;
            if (algoResult && algoResult.trend !== 'neutral') {
-              const currentPrice = chartData[chartData.length - 1].close;
+               const currentPrice = algoResult.currentPrice;
               // Check if it's decently actionable (entry within 2% of current price)
               const entryDiff = Math.abs(algoResult.entry - currentPrice) / currentPrice;
               
@@ -1733,6 +1758,30 @@ async function startServer() {
   setInterval(runDailyAIOptimizer, 60 * 60 * 1000);
 
   // Manual Trigger Endpoint for Settings
+  app.get('/api/admin/config', authMiddleware, async (req: any, res) => {
+     if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
+       return res.status(403).json({ error: 'Only Admins can view config.' });
+     }
+     try {
+        let config = await EngineConfig.findOne({ id: 'global' });
+        if (!config) config = await EngineConfig.create({ id: 'global', autoBotBalance: 100 });
+        res.json(config);
+     } catch(e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post('/api/admin/config', authMiddleware, async (req: any, res) => {
+     if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
+       return res.status(403).json({ error: 'Only Admins can update config.' });
+     }
+     try {
+        let config = await EngineConfig.findOne({ id: 'global' });
+        if (!config) config = await EngineConfig.create({ id: 'global', autoBotBalance: 100 });
+        if (req.body.tradingModel) config.tradingModel = req.body.tradingModel;
+        await config.save();
+        res.json({ success: true, message: 'Settings saved', config });
+     } catch(e: any) { res.status(500).json({ error: e.message }); }
+  });
+
   app.post('/api/ml/optimize', authMiddleware, async (req: any, res) => {
       if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin' && req.user.role !== 'pro') {
          return res.status(403).json({ error: 'Only PRO users and Admins can run the optimizer.' });
