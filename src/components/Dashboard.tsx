@@ -1183,9 +1183,10 @@ plot(close)"
                                        <button 
                                          onClick={async (e) => {
                                            e.stopPropagation();
-                                           const reason = window.prompt(`Close position for ${pos.symbol}?\nOptional: Enter reason for closing (e.g., Taking manual profits early, News event, etc):`);
-                                           if(reason !== null) {
+                                           const confirmed = window.confirm(`Close position for ${pos.symbol}?`);
+                                           if(confirmed) {
                                              try {
+                                                const reason = 'User manually closed';
                                                 await axios.post('/api/trade/close', { symbol: pos.symbol, reason });
                                                 alert("Closed!");
                                                 fetchTrades();
@@ -1255,9 +1256,10 @@ plot(close)"
                                        <button 
                                          onClick={async (e) => {
                                             e.stopPropagation();
-                                            const reason = window.prompt(`Close auto-trade for ${trade.symbol}?\nOptional: Enter reason for closing:`);
-                                            if(reason !== null) {
+                                            const confirmed = window.confirm(`Close auto-trade for ${trade.symbol}?`);
+                                            if(confirmed) {
                                               try {
+                                                 const reason = 'User manually closed';
                                                  await axios.post('/api/trade/close_auto', { tradeId: trade._id, reason });
                                                  alert("Closed!");
                                                  fetchTrades();

@@ -185,6 +185,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
 
     return {
+      leverage: 10,
       score: 0,
       trend: isBull ? 'bullish' : 'bearish',
       waves: {
@@ -294,7 +295,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
+            const recLeverage = Math.floor(Math.max(3, Math.min(50, (score / 100) * 50)));
             bestSetup = {
+              leverage: recLeverage,
               score,
               trend: 'bullish',
               params: { retrace2, ext3, retrace4 },
@@ -405,7 +408,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
+            const recLeverage = Math.floor(Math.max(3, Math.min(50, (score / 100) * 50)));
             bestSetup = {
+              leverage: recLeverage,
               score,
               trend: 'bearish',
               params: { retrace2, ext3, retrace4 },
@@ -456,6 +461,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
 
     return {
+      leverage: 10,
       score: 0,
       trend: isBull ? 'bullish' : 'bearish',
       waves: {

@@ -537,7 +537,7 @@ async function startServer() {
       const existing = await TradeSignal.findOne({ symbol, status: 'pending', trend });
       
       const tradeAmountDollars = amount || 10;
-      const leverage = 10; // Use 10x leverage for calculations
+      const leverage = setupData?.leverage || 10; // Dynamic leverage
       const positionSizeUsdt = tradeAmountDollars * leverage;
       
       const entryPrice = parseFloat(entry);
@@ -1177,7 +1177,7 @@ async function startServer() {
                       const result = customFunc(pair, parseFloat(pair.lastPrice));
                       if (result && result.trend && result.entry && result.target && result.stopLoss) {
                          const side = result.trend === 'bullish' ? 'BUY' : 'SELL';
-                         const leverage = 10;
+                         const leverage = result.leverage || 10;
                          const currentPrice = parseFloat(pair.lastPrice);
                          const positionSizeUsdt = (result.amount || 10) * leverage;
                          const quantity = +(positionSizeUsdt / currentPrice).toFixed(4);
@@ -1329,7 +1329,7 @@ async function startServer() {
                        
                        // Full budget allocation per trade, but we divide by 5 to allow max 10 concurrent trades
                        const tradeAmountDollars = engineCfg.tradeAmountFixed || 10;
-                       const leverage = 10;
+                       const leverage = alert.setupData && alert.setupData.leverage ? alert.setupData.leverage : 10;
                        
                        let activePosSize = tradeAmountDollars * leverage;
                        let activeSl = alert.stopLoss;
@@ -1405,7 +1405,7 @@ async function startServer() {
                          if (isEntryHit) {
                              try {
                                  const tradeAmountDollars = signal.amount || 10;
-                                 const leverage = 10;
+                                 const leverage = signal.setupData && signal.setupData.leverage ? signal.setupData.leverage : 10;
                                  const positionSizeUsdt = tradeAmountDollars * leverage;
                                  const quantity = (positionSizeUsdt / price).toFixed(3);
                                  const side = signal.trend === 'bullish' ? 'BUY' : 'SELL';
@@ -1547,7 +1547,7 @@ async function startServer() {
                     }
                     signal.status = outcome;
                     signal.pnlPercent = pnl;
-                    const leverage = 10;
+                    const leverage = signal.setupData && signal.setupData.leverage ? signal.setupData.leverage : 10;
                     signal.realizedPnl = (signal.amount || 10) * leverage * (pnl / 100);
                     // Handle compounding
                     let engineCfg = await EngineConfig.findOne({ id: 'global' });
