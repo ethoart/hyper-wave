@@ -101,6 +101,13 @@ const engineConfigSchema = new mongoose.Schema({
   params: mongoose.Schema.Types.Mixed,
   insights: String,
   autoBotBalance: { type: Number, default: 100 },
+  tradeAmountFixed: { type: Number, default: 15 },
+  telegramUserId: String,
+  telegramBotToken: String,
+  whatsappNumber: String,
+  twilioSid: String,
+  twilioToken: String,
+  twilioFrom: String,
   tradingModel: { type: String, default: 'AUTO_OPTIMIZED' },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -1316,7 +1323,7 @@ async function startServer() {
                        }
                        
                        // Full budget allocation per trade, but we divide by 5 to allow max 10 concurrent trades
-                       const tradeAmountDollars = +(currentBudget / 5).toFixed(2);
+                       const tradeAmountDollars = engineCfg.tradeAmountFixed || 15;
                        const leverage = 10;
                        
                        let activePosSize = tradeAmountDollars * leverage;
@@ -1775,6 +1782,13 @@ async function startServer() {
         let config = await EngineConfig.findOne({ id: 'global' });
         if (!config) config = await EngineConfig.create({ id: 'global', autoBotBalance: 100 });
         if (req.body.tradingModel) config.tradingModel = req.body.tradingModel;
+        if (req.body.tradeAmountFixed) config.tradeAmountFixed = req.body.tradeAmountFixed;
+        if (req.body.telegramUserId) config.telegramUserId = req.body.telegramUserId;
+        if (req.body.telegramBotToken) config.telegramBotToken = req.body.telegramBotToken;
+        if (req.body.whatsappNumber) config.whatsappNumber = req.body.whatsappNumber;
+        if (req.body.twilioSid) config.twilioSid = req.body.twilioSid;
+        if (req.body.twilioToken) config.twilioToken = req.body.twilioToken;
+        if (req.body.twilioFrom) config.twilioFrom = req.body.twilioFrom;
         await config.save();
         res.json({ success: true, message: 'Settings saved', config });
      } catch(e: any) { res.status(500).json({ error: e.message }); }

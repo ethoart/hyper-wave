@@ -34,7 +34,7 @@ export function Dashboard() {
   }, [interval]);
   
   const [watchlist, setWatchlist] = useState<Array<{symbol: string, pinned: boolean, timestamp: number}>>([]);
-  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades' | 'market'>('watchlist');
+  const [rightSidebarTab, setRightSidebarTab] = useState<'watchlist' | 'trades' | 'market' | 'history'>('watchlist');
   const [additionalCharts, setAdditionalCharts] = useState<Array<{symbol: string, interval: string}>>([]);
   
   const [drawingColor, setDrawingColor] = useState('#2962ff');
@@ -601,7 +601,7 @@ export function Dashboard() {
     }
   };
 
-  const handleScanBestPair = async () => {
+  const handleScanBestPair = async (isAuto: boolean = false) => {
     setScanning(true);
     try {
       const res = await axios.get('/api/market/scan');
@@ -627,8 +627,10 @@ export function Dashboard() {
         });
         
         addNotification(`Engine found best pairs: ${newSymbols.join(', ')}`);
-        setSymbol(best.symbol);
-        setSymbolInput(best.symbol);
+        if (!isAuto) {
+            setSymbol(best.symbol);
+            setSymbolInput(best.symbol);
+        }
       }
     } catch(err) {
       console.error("Scan error", err);
@@ -640,9 +642,9 @@ export function Dashboard() {
   useEffect(() => {
     const scanInterval = setInterval(() => {
        if ((user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'pro')) {
-         handleScanBestPair();
+         handleScanBestPair(true);
        }
-    }, 60000 * 5); // every 5 minutes
+    }, 60000 * 10); // every 5 minutes
     return () => clearInterval(scanInterval);
   }, [user]);
 
@@ -1268,8 +1270,10 @@ plot(close)"
                              </div>
                            )}
                          </div>
-
-                         <div className="mt-4 mb-4">
+                       </div>
+                    ) : rightSidebarTab === 'history' ? (
+                       <div className="flex-1 overflow-y-auto no-scrollbar p-3 relative">
+                         <div className="mb-4">
                            <div className="text-xs text-[#787b86] font-bold mb-2 uppercase">Recent Outcomes</div>
                            {closedTrades.length === 0 ? (
                              <div className="text-sm text-[#787b86] italic py-2">No completed trades yet.</div>
@@ -1664,7 +1668,33 @@ plot(close)"
                             Global Trade Bot Settings
                          </h3>
                          <div className="bg-[#131722] p-4 border border-[#2a2e39] rounded">
+                             
+                             <label className="block text-xs text-[#787b86] mb-2 mt-4 uppercase font-bold">Trade Size (USD)</label>
+                             <input 
+                               type="number" 
+                               value={adminConfig.tradeAmountFixed || 15}
+                               onChange={(e) => saveAdminConfig('tradeAmountFixed', Number(e.target.value))}
+                               className="w-full bg-[#2a2e39] text-white text-sm border border-[#363a45] rounded p-2 outline-none focus:border-[#2962ff] mb-4"
+                             />
+
+                             <label className="block text-xs text-[#787b86] mb-2 uppercase font-bold">Telegram Notifications</label>
+                             <div className="flex gap-2 mb-2">
+                               <input placeholder="Bot Token" value={adminConfig.telegramBotToken || ''} onChange={(e) => saveAdminConfig('telegramBotToken', e.target.value)} className="w-1/2 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                               <input placeholder="Chat ID" value={adminConfig.telegramUserId || ''} onChange={(e) => saveAdminConfig('telegramUserId', e.target.value)} className="w-1/2 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                             </div>
+                             
+                             <label className="block text-xs text-[#787b86] mb-2 uppercase font-bold mt-4">WhatsApp Notifications (Twilio)</label>
+                             <div className="flex gap-2 mb-2">
+                               <input placeholder="Twilio SID" value={adminConfig.twilioSid || ''} onChange={(e) => saveAdminConfig('twilioSid', e.target.value)} className="flex-1 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                               <input placeholder="Auth Token" value={adminConfig.twilioToken || ''} onChange={(e) => saveAdminConfig('twilioToken', e.target.value)} className="flex-1 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                             </div>
+                             <div className="flex gap-2 mb-4">
+                               <input placeholder="From Number (+1...)" value={adminConfig.twilioFrom || ''} onChange={(e) => saveAdminConfig('twilioFrom', e.target.value)} className="w-1/2 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                               <input placeholder="To Number (+1...)" value={adminConfig.whatsappNumber || ''} onChange={(e) => saveAdminConfig('whatsappNumber', e.target.value)} className="w-1/2 bg-[#2a2e39] text-white text-xs border border-[#363a45] rounded p-2 outline-none" />
+                             </div>
+
                              <label className="block text-xs text-[#787b86] mb-2 uppercase font-bold">Auto-Trade Strategy Model</label>
+
                              <select 
                                 value={adminConfig.tradingModel || 'AUTO_OPTIMIZED'} 
                                 onChange={(e) => saveAdminConfig('tradingModel', e.target.value)}
