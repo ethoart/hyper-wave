@@ -1073,10 +1073,10 @@ plot(close)"
                      Trades
                    </button>
                    <button 
-                     onClick={() => setRightSidebarTab('market')}
-                     className={`flex-1 py-3 text-[10px] sm:text-xs uppercase font-bold tracking-wider border-b-2 transition-colors flex items-center justify-center gap-1 ${rightSidebarTab === 'market' ? 'border-[#2962ff] text-white' : 'border-transparent text-[#787b86] hover:text-[#d1d4dc]'}`}
+                     onClick={() => setRightSidebarTab('history')}
+                     className={`flex-1 py-3 text-[10px] sm:text-xs uppercase font-bold tracking-wider border-b-2 transition-colors flex items-center justify-center gap-1 ${rightSidebarTab === 'history' ? 'border-[#2962ff] text-white' : 'border-transparent text-[#787b86] hover:text-[#d1d4dc]'}`}
                    >
-                     Order Book
+                     History
                    </button>
                 </div>
                 
@@ -1344,100 +1344,6 @@ plot(close)"
                                ))}
                              </div>
                            )}
-                         </div>
-                      </div>
-                   ) : rightSidebarTab === 'market' ? (
-                      <div className="flex flex-col gap-4 flex-1 h-full min-h-[500px]">
-                         <div>
-                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase flex items-center justify-between">
-                               <span>Fear & Greed</span>
-                            </div>
-                            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-4 flex flex-col items-center">
-                               <div className="relative w-32 h-16 overflow-hidden rounded-t-full bg-[#131722] mb-4">
-                                  <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-[#2a2e39]" />
-                                  <div className="absolute top-0 left-0 w-full h-[200%] rounded-full border-[10px] border-t-transparent border-r-transparent border-l-[#f23645] border-b-[#089981] -rotate-45" />
-                                  <div className="absolute bottom-0 left-1/2 w-2 h-16 origin-bottom transition-transform duration-1000 ease-out" style={{ transform: `translateX(-50%) rotate(${(fng?.value || 50) * 1.8 - 90}deg)` }}>
-                                     <div className="w-1.5 h-10 bg-white rounded-t-full mx-auto shadow" />
-                                     <div className="w-3 h-3 bg-white rounded-full mx-auto -mt-1" />
-                                  </div>
-                               </div>
-                               <div className="text-2xl font-black text-white">{fng?.value || '-'}</div>
-                               <div className="text-sm font-bold" style={{ color: fng?.value ? (fng.value > 50 ? '#089981' : '#f23645') : '#787b86' }}>{fng?.classification?.toUpperCase() || 'LOADING'}</div>
-                               <div className="text-[10px] text-[#787b86] mt-2 text-center">Current market sentiment</div>
-                            </div>
-                         </div>
-                         <div className="flex-1 flex flex-col min-h-0 relative">
-                            <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase flex items-center justify-between">
-                               <span>Order Book</span>
-                               <span className="text-[#787b86] font-normal">{symbol}</span>
-                            </div>
-                            <div className="flex flex-col flex-1 bg-[#1e222d] border border-[#2a2e39] rounded text-xs overflow-hidden font-mono">
-                               <div className="flex w-full text-[#787b86] p-2 border-b border-[#2a2e39] bg-[#131722]">
-                                  <div className="flex-1">Price</div>
-                                  <div className="flex-1 text-right">Size</div>
-                                  <div className="flex-1 text-right">Total</div>
-                               </div>
-                               <div className="flex flex-col flex-1 overflow-y-auto hide-scrollbar">
-                                   <div className="flex flex-col justify-end min-h-[150px] p-1">
-                                       {(() => {
-                                           let askSum = 0;
-                                           const processedAsks = [...orderBook.asks].slice(0, 15).map(ask => {
-                                               askSum += parseFloat(ask[1]);
-                                               return { price: parseFloat(ask[0]), size: parseFloat(ask[1]), total: askSum };
-                                           });
-                                           let bidSum = 0;
-                                           const processedBids = [...orderBook.bids].slice(0, 15).map(bid => {
-                                               bidSum += parseFloat(bid[1]);
-                                               return { price: parseFloat(bid[0]), size: parseFloat(bid[1]), total: bidSum };
-                                           });
-                                           const maxTotal = Math.max(askSum, bidSum, 1);
-                                           
-                                           return [...processedAsks].reverse().map((ask, i) => {
-                                               const w = (ask.total / maxTotal) * 100;
-                                               return (
-                                                   <div key={`ask-${i}`} className="flex w-full py-0.5 relative group hover:bg-[#2a2e39]">
-                                                      <div className="absolute right-0 top-0 bottom-0 bg-[#f23645]/10 z-0 transition-all" style={{ width: `${w}%` }} />
-                                                      <div className="flex-1 text-[#f23645] z-10 pl-1">{ask.price < 1 ? ask.price.toFixed(5) : ask.price.toFixed(2)}</div>
-                                                      <div className="flex-1 text-right text-white z-10">{ask.size.toFixed(4)}</div>
-                                                      <div className="flex-1 text-right text-[#787b86] z-10 pr-1">{ask.total.toFixed(4)}</div>
-                                                   </div>
-                                               );
-                                           });
-                                       })()}
-                                   </div>
-                                   
-                                   <div className="flex items-center justify-between p-2 border-y border-[#2a2e39] bg-[#131722]">
-                                      <span className="text-white font-bold text-sm" style={{ color: liveCandle?.close >= liveCandle?.open ? '#089981' : '#f23645' }}>
-                                         {liveCandle?.close || '-'}
-                                      </span>
-                                      <span className="text-[#787b86] text-xs">Spread</span>
-                                   </div>
-
-                                   <div className="flex flex-col justify-start min-h-[150px] p-1">
-                                       {(() => {
-                                           let bidSum = 0;
-                                           const processedBids = [...orderBook.bids].slice(0, 15).map(bid => {
-                                               bidSum += parseFloat(bid[1]);
-                                               return { price: parseFloat(bid[0]), size: parseFloat(bid[1]), total: bidSum };
-                                           });
-                                           let askSum = orderBook.asks.slice(0, 15).reduce((acc, a) => acc + parseFloat(a[1]), 0);
-                                           const maxTotal = Math.max(bidSum, askSum, 1);
-                                           
-                                           return processedBids.map((bid, i) => {
-                                               const w = (bid.total / maxTotal) * 100;
-                                               return (
-                                                   <div key={`bid-${i}`} className="flex w-full py-0.5 relative group hover:bg-[#2a2e39]">
-                                                      <div className="absolute right-0 top-0 bottom-0 bg-[#089981]/10 z-0 transition-all" style={{ width: `${w}%` }} />
-                                                      <div className="flex-1 text-[#089981] z-10 pl-1">{bid.price < 1 ? bid.price.toFixed(5) : bid.price.toFixed(2)}</div>
-                                                      <div className="flex-1 text-right text-white z-10">{bid.size.toFixed(4)}</div>
-                                                      <div className="flex-1 text-right text-[#787b86] z-10 pr-1">{bid.total.toFixed(4)}</div>
-                                                   </div>
-                                               );
-                                           });
-                                       })()}
-                                   </div>
-                               </div>
-                            </div>
                          </div>
                       </div>
                    ) : null}
