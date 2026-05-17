@@ -103,7 +103,7 @@ const engineConfigSchema = new mongoose.Schema({
   params: mongoose.Schema.Types.Mixed,
   insights: String,
   autoBotBalance: { type: Number, default: 100 },
-  tradeAmountFixed: { type: Number, default: 15 },
+  tradeAmountFixed: { type: Number, default: 10 },
   telegramUserId: String,
   telegramBotToken: String,
   whatsappNumber: String,
@@ -1328,7 +1328,7 @@ async function startServer() {
                        }
                        
                        // Full budget allocation per trade, but we divide by 5 to allow max 10 concurrent trades
-                       const tradeAmountDollars = engineCfg.tradeAmountFixed || 15;
+                       const tradeAmountDollars = engineCfg.tradeAmountFixed || 10;
                        const leverage = 10;
                        
                        let activePosSize = tradeAmountDollars * leverage;
@@ -1400,7 +1400,7 @@ async function startServer() {
                          let isEntryHit = false;
                          if (signal.trend === 'bullish' && price <= signal.entry) isEntryHit = true;
                          if (signal.trend === 'bearish' && price >= signal.entry) isEntryHit = true;
-                         if (diffPercent <= 0.01) isEntryHit = true;
+                         if (diffPercent <= 0.002) isEntryHit = true;
                          
                          if (isEntryHit) {
                              try {
@@ -1474,9 +1474,13 @@ async function startServer() {
                      if (signal.trend === 'bullish') {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
-                         if (progress >= 0.4 && signal.stopLoss < signal.entry * 1.001) {
-                             signal.stopLoss = signal.entry * 1.002;
-                             closeReason += ' Trailed SL up. ';
+                         if (progress >= 0.6 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.4) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.4;
+                             closeReason += ' Trailed SL to +40% profit. ';
+                             signal.save().catch(()=>{});
+                         } else if (progress >= 0.3 && signal.stopLoss < signal.entry * 1.005) {
+                             signal.stopLoss = signal.entry * 1.005;
+                             closeReason += ' Trailed SL up safely. ';
                              signal.save().catch(()=>{});
                          }
                          if (currentPnl <= -10) {
@@ -1499,9 +1503,13 @@ async function startServer() {
                      } else if (signal.trend === 'bearish') {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
-                         if (progress >= 0.4 && signal.stopLoss > signal.entry * 0.999) {
-                             signal.stopLoss = signal.entry * 0.998;
-                             closeReason += ' Trailed SL down. ';
+                         if (progress >= 0.6 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.4) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.4;
+                             closeReason += ' Trailed SL to +40% profit. ';
+                             signal.save().catch(()=>{});
+                         } else if (progress >= 0.3 && signal.stopLoss > signal.entry * 0.995) {
+                             signal.stopLoss = signal.entry * 0.995;
+                             closeReason += ' Trailed SL down safely. ';
                              signal.save().catch(()=>{});
                          }
                          if (currentPnl <= -10) {
@@ -1579,9 +1587,13 @@ async function startServer() {
                      let currentPnl = (price - entry) / entry * ut.amount * 10;
                      if (target) userProgress = (price - entry) / (target - entry);
                      
-                     if (userProgress >= 0.4 && ut.stopLoss < entry * 1.001) {
-                         ut.stopLoss = entry * 1.002;
-                         closeReason += ' Trailed SL up. ';
+                     if (userProgress >= 0.6 && ut.stopLoss < entry + (target - entry) * 0.4) {
+                         ut.stopLoss = entry + (target - entry) * 0.4;
+                         closeReason += ' Trailed SL to +40% profit. ';
+                         ut.save().catch(()=>{});
+                     } else if (userProgress >= 0.3 && ut.stopLoss < entry * 1.005) {
+                         ut.stopLoss = entry * 1.005;
+                         closeReason += ' Trailed SL up safely. ';
                          ut.save().catch(()=>{});
                      }
                      
@@ -1606,9 +1618,13 @@ async function startServer() {
                      let currentPnl = (entry - price) / entry * ut.amount * 10;
                      if (target) userProgress = (entry - price) / (entry - target);
                      
-                     if (userProgress >= 0.4 && ut.stopLoss > entry * 0.999) {
-                         ut.stopLoss = entry * 0.998;
-                         closeReason += ' Trailed SL down. ';
+                     if (userProgress >= 0.6 && ut.stopLoss > entry - (entry - target) * 0.4) {
+                         ut.stopLoss = entry - (entry - target) * 0.4;
+                         closeReason += ' Trailed SL to +40% profit. ';
+                         ut.save().catch(()=>{});
+                     } else if (userProgress >= 0.3 && ut.stopLoss > entry * 0.995) {
+                         ut.stopLoss = entry * 0.995;
+                         closeReason += ' Trailed SL down safely. ';
                          ut.save().catch(()=>{});
                      }
                      if (currentPnl <= -10) {

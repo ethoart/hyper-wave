@@ -119,7 +119,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
   rsiDivergence = confirmations.length > 0 ? "\n\nMULTIPLE CONFIRMATIONS:\n- " + confirmations.join("\n- ") : "";
 
-  const pivots = findPivots(data, 12, 12); // 12 bars left/right lookback for stronger distinct structural waves
+  const pivots = findPivots(data, 8, 5); // Faster reaction to structural shifts
   
   const getTradeStyle = (intv: string) => {
       if (['1m', '3m', '5m', '15m'].includes(intv)) return "SCALP TRADE";
@@ -170,8 +170,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
     const entry = data[len-1].close;
     
-    let target = isBull ? entry * 1.10 : entry * 0.90;
-    let stop = isBull ? entry * 0.97 : entry * 1.03; // Simple 3% risk
+    let target = isBull ? entry * 1.03 : entry * 0.97;
+    let stop = isBull ? entry * 0.985 : entry * 1.015; // Simple 1.5% risk
 
     // Enforce 2% to 5% risk bound
     if (isBull) {
@@ -225,9 +225,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       // Basic directional checks - if it's completely wrong direction, then skip
       if (w1 <= start || w3 <= w2) continue;
 
-      if (w2 <= start) score -= 50; // Wave 2 shouldn't go below start
-      if (w4 <= w1) score -= 30; // Overlap rule often broken in crypto by wicks
-      if (w3 <= w1) score -= 20; // Wave 3 usually the longest
+      if (w2 <= start) continue; // W2 must not go below start
+      if (w4 <= w1 * 0.99) continue; // W4 shouldn't overlap W1 too much
+      if (w3 <= w1) continue; // W3 must be higher than W1 for impulse
 
       if (w4 <= w2) continue; // W4 cannot go below W2 in bullish
 
@@ -260,10 +260,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 + 0.618 * (w3 - start);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w1;
-        if (validStopLoss >= w4) {
-           validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
-        }
+        let validStopLoss = w4 * 0.99; // Much tighter SL: 1% below Wave 4 base
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -276,15 +273,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage (i.e. 2% to 5% max risk)
-        const minSL_price = suggestedEntry * (1 - 0.08); // Max 5% drop
-        const maxSL_price = suggestedEntry * (1 - 0.03); // Min 2% drop
+        const minSL_price = suggestedEntry * (1 - 0.04); // Max 4% drop
+        const maxSL_price = suggestedEntry * (1 - 0.015); // Min 1.5% drop
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
 
         // Enforce target to be a reasonable Risk/Reward (at least 1.5x up to 4x)
         let finalTargetCopy = finalTarget;
-        const minTarget = suggestedEntry * (1 + 0.10); // Min 3% move
-        const maxTarget = suggestedEntry * (1 + 0.20); // Max 15% move
+        const minTarget = suggestedEntry * (1 + 0.02); // Min 2% move
+        const maxTarget = suggestedEntry * (1 + 0.06); // Max 6% move
         if (finalTargetCopy < minTarget) finalTargetCopy = minTarget;
         if (finalTargetCopy > maxTarget) finalTargetCopy = maxTarget;
         
@@ -339,9 +336,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       
       if (w1 >= start || w3 >= w2) continue; // Basic directional check
 
-      if (w2 >= start) score -= 50;
-      if (w4 >= w1) score -= 30;
-      if (w3 >= w1) score -= 20;
+      if (w2 >= start) continue; // W2 must not go above start
+      if (w4 >= w1 * 1.01) continue; // W4 shouldn't overlap W1 too much
+      if (w3 >= w1) continue; // W3 must be lower than W1 for impulse
 
       if (w4 >= w2) continue; // W4 cannot go above W2 in bearish
 
@@ -374,10 +371,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 - 0.618 * (start - w3);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w1;
-        if (validStopLoss <= w4) {
-           validStopLoss = w2; // Fallback to w2 if w1 overlaps w4
-        }
+        let validStopLoss = w4 * 1.01; // Much tighter SL: 1% above Wave 4 peak
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -390,15 +384,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage
-        const maxSL_price = suggestedEntry * (1 + 0.08); // Max 8% climb
-        const minSL_price = suggestedEntry * (1 + 0.03); // Min 3% climb
+        const maxSL_price = suggestedEntry * (1 + 0.04); // Max 4% climb
+        const minSL_price = suggestedEntry * (1 + 0.015); // Min 1.5% climb
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
 
         // Enforce target to be a reasonable Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget_b = suggestedEntry * (1 - 0.10); // Min 3% drop
-        const maxTarget_b = suggestedEntry * (1 - 0.20); // Max 15% drop
+        const minTarget_b = suggestedEntry * (1 - 0.02); // Min 2% drop
+        const maxTarget_b = suggestedEntry * (1 - 0.06); // Max 6% drop
         if (finalTargetCopy > minTarget_b) finalTargetCopy = minTarget_b;
         if (finalTargetCopy < maxTarget_b) finalTargetCopy = maxTarget_b;
 
@@ -447,7 +441,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const len = data.length;
     const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
     const entry = data[len-1].close;
-    const target = isBull ? entry * 1.10 : entry * 0.90;
+    const target = isBull ? entry * 1.03 : entry * 0.97;
     let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
 
     // Enforce 2% to 5% risk bound
