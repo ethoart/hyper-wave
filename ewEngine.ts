@@ -157,15 +157,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
        let avgLoss = losses / period;
        let currentRsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
        
-       if (currentRsi > 55) {
+       if (currentRsi > 65) {
            isBull = true; // Momentum -> Bullish
-       } else if (currentRsi < 45) {
+       } else if (currentRsi < 35) {
            isBull = false; // Momentum -> Bearish
        } else {
-           isBull = data[len-1].close > data[Math.max(0, len-50)].close; // Simple trend following
+           return null; // Don't take trade, chop zone
        }
     } else {
-       isBull = data[len-1].close > data[Math.max(0, len-50)].close; // Simple trend following
+       return null; // Not enough data
     }
 
     const entry = data[len-1].close;
@@ -441,44 +441,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     }
   }
 
-  if (!bestSetup) {
-    // Fallback if no valid complex structure found but we want a trade signal
-    const len = data.length;
-    const isBull = data[len-1].close > data[Math.max(0, len-50)].close;
-    const entry = data[len-1].close;
-    const target = isBull ? entry * 1.03 : entry * 0.97;
-    let stop = isBull ? Math.min(data[Math.max(0, len-50)].close, entry * 0.95) : Math.max(data[Math.max(0, len-50)].close, entry * 1.05);
-
-    // Enforce 2% to 5% risk bound
-    if (isBull) {
-        if (stop < entry * 0.95) stop = entry * 0.95;
-        if (stop > entry * 0.98) stop = entry * 0.98;
-    } else {
-        if (stop > entry * 1.05) stop = entry * 1.05;
-        if (stop < entry * 1.02) stop = entry * 1.02;
-    }
-
-    const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
-
-    return {
-      leverage: 10,
-      score: 0,
-      trend: isBull ? 'bullish' : 'bearish',
-      waves: {
-        start: { price: data[Math.max(0, len-50)].close, time: data[Math.max(0, len-50)].time, label: '0' },
-        w1: { price: data[Math.max(0, len-40)].close, time: data[Math.max(0, len-40)].time, label: '1' },
-        w2: { price: data[Math.max(0, len-30)].close, time: data[Math.max(0, len-30)].time, label: '2' },
-        w3: { price: data[Math.max(0, len-20)].close, time: data[Math.max(0, len-20)].time, label: '3' },
-        w4: { price: data[Math.max(0, len-10)].close, time: data[Math.max(0, len-10)].time, label: '4' }
-      },
-      entry: entry,
-      stopLoss: stop,
-      target: target,
-      tradeStyle,
-      termStyle,
-      gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Statistical momentum continuation setup detected (Mean-Reversion Fallback).\n\nTARGET JUSTIFICATION: The algorithm targets ${target.toFixed(4)} to secure early profits before the momentum exhausts.\n\nSTOP LOSS: Capital protection placed at ${stop.toFixed(4)}. Evaluated strictly to cut losses early if market structure flips against the intended trend momentum.\n\nAUTO SECURE: Algorithm manages floating profits aggressively trailing stops.${rsiDivergence}`
-    };
+  if (!bestSetup || highestScore < 50) {
+    return null; // Return null instead of taking a weak highly risky fallback
   }
 
   return bestSetup;

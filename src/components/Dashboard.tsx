@@ -1124,91 +1124,96 @@ plot(close)"
                       </div>
                    ) : rightSidebarTab === 'trades' ? (
                       <div className="flex flex-col gap-4">
-                         {binanceBalance !== null ? (
-                            <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center mb-4">
-                               <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Wallet</span>
-                               <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
-                            </div>
-                         ) : (
-                            <div className="bg-[#f23645]/10 border border-[#f23645]/20 p-3 rounded flex justify-between items-center mb-4 cursor-pointer" onClick={() => { setShowSettings(true); setSettingsTab('profile'); }}>
-                               <span className="text-xs text-[#f23645] font-bold uppercase">Binance Wallet</span>
-                               <span className="text-[#f23645] text-[10px] font-bold uppercase flex items-center gap-1 hover:text-white transition-colors">Setup API Keys <Settings className="w-3 h-3"/></span>
-                            </div>
-                         )}
-                         <div className="flex-1">
-                           <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Live Binance Positions</div>
-                           {livePositions.length === 0 ? (
-                             <div className="text-sm text-[#787b86] italic py-2">No active positions.</div>
-                           ) : (
-                             <div className="flex flex-col gap-2">
-                               {livePositions.map((pos: any, idx) => (
-                                  <div 
-                                     key={idx} 
-                                     onClick={() => setSymbol(pos.symbol)}
-                                     className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors"
-                                  >
-                                     <div className="flex justify-between items-center w-full mb-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-bold text-white text-sm">
-                                              <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
-                                              {pos.termStyle === 'SHORT_TERM' ? <span className="ml-2 text-[9px] bg-[#f59e0b]/20 text-[#f59e0b] px-1 py-0.5 rounded uppercase tracking-wider">SHORT TERM</span> : pos.termStyle === 'LONG_TERM' ? <span className="ml-2 text-[9px] bg-[#2962ff]/20 text-[#2962ff] px-1 py-0.5 rounded uppercase tracking-wider">LONG TERM</span> : null}
-                                          </span>
-                                          {pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
-                                        </div>
-                                        <span className={`text-xs font-bold ${pos.unRealizedProfit > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
-                                          ${pos.unRealizedProfit.toFixed(2)}
-                                        </span>
-                                     </div>
-                                     <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="text-xs text-[#787b86]">Entry: {pos.entryPrice.toFixed(4)}</span>
-                                        <span className="text-xs text-[#787b86]">
-                                          Size: ${pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') ? (pos.amount * pos.leverage).toFixed(2) : (pos.amount * pos.markPrice).toFixed(2)} ({pos.leverage}x)
-                                        </span>
-                                     </div>
-                                     <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
-                                       <button 
-                                         onClick={async (e) => {
-                                            e.stopPropagation();
-                                            const setTp = prompt(`Set Take Profit for ${pos.symbol} (${pos.side}):`);
-                                            const setSl = prompt(`Set Stop Loss for ${pos.symbol} (${pos.side}):`);
-                                            if (!setTp && !setSl) return;
-                                            try {
-                                              await axios.post('/api/trade/tpsl', { symbol: pos.symbol, positionSide: pos.side, tp: setTp, sl: setSl });
-                                              alert("TP/SL updated! ✅");
-                                              fetchTrades();
-                                            } catch (err: any) { alert("Error: " + (err.response?.data?.error || err.message)); }
-                                         }}
-                                         className="flex-1 bg-[#2a2e39] hover:bg-[#363a45] text-[#d1d4dc] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
-                                       >
-                                         Set TP/SL
-                                       </button>
-                                       <button 
-                                         onClick={async (e) => {
-                                           e.stopPropagation();
-                                           const confirmed = window.confirm(`Close position for ${pos.symbol}?`);
-                                           if(confirmed) {
-                                             try {
-                                                const reason = 'User manually closed';
-                                                await axios.post('/api/trade/close', { symbol: pos.symbol, reason });
-                                                alert("Closed!");
-                                                fetchTrades();
-                                             } catch(err:any) { alert(err.response?.data?.error || err.message); }
-                                           }
-                                         }}
-                                         className="flex-1 bg-[#f23645]/10 hover:bg-[#f23645]/20 text-[#f23645] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
-                                       >
-                                         Close Pos
-                                       </button>
-                                     </div>
-                                  </div>
-                               ))}
+                         {user?.role !== 'user' && (
+                           <>
+                             {binanceBalance !== null ? (
+                                <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 p-3 rounded flex justify-between items-center mb-4">
+                                   <span className="text-xs text-[#2962ff] font-bold uppercase">Binance Wallet</span>
+                                   <span className="text-white font-bold">${binanceBalance.toFixed(2)} USDT</span>
+                                </div>
+                             ) : (
+                                <div className="bg-[#f23645]/10 border border-[#f23645]/20 p-3 rounded flex justify-between items-center mb-4 cursor-pointer" onClick={() => { setShowSettings(true); setSettingsTab('profile'); }}>
+                                   <span className="text-xs text-[#f23645] font-bold uppercase">Binance Wallet</span>
+                                   <span className="text-[#f23645] text-[10px] font-bold uppercase flex items-center gap-1 hover:text-white transition-colors">Setup API Keys <Settings className="w-3 h-3"/></span>
+                                </div>
+                             )}
+                             <div className="flex-1">
+                               <div className="text-xs text-[#2962ff] font-bold mb-2 uppercase">Live Binance Positions</div>
+                               {livePositions.length === 0 ? (
+                                 <div className="text-sm text-[#787b86] italic py-2">No active positions.</div>
+                               ) : (
+                                 <div className="flex flex-col gap-2">
+                                   {livePositions.map((pos: any, idx) => (
+                                      <div 
+                                         key={idx} 
+                                         onClick={() => setSymbol(pos.symbol)}
+                                         className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors"
+                                      >
+                                         <div className="flex justify-between items-center w-full mb-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-bold text-white text-sm">
+                                                  <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
+                                                  {pos.termStyle === 'SHORT_TERM' ? <span className="ml-2 text-[9px] bg-[#f59e0b]/20 text-[#f59e0b] px-1 py-0.5 rounded uppercase tracking-wider">SHORT TERM</span> : pos.termStyle === 'LONG_TERM' ? <span className="ml-2 text-[9px] bg-[#2962ff]/20 text-[#2962ff] px-1 py-0.5 rounded uppercase tracking-wider">LONG TERM</span> : null}
+                                              </span>
+                                              {pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
+                                            </div>
+                                            <span className={`text-xs font-bold ${pos.unRealizedProfit > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                                              ${pos.unRealizedProfit.toFixed(2)}
+                                            </span>
+                                         </div>
+                                         <div className="flex justify-between items-center w-full mb-1">
+                                            <span className="text-xs text-[#787b86]">Entry: {pos.entryPrice.toFixed(4)}</span>
+                                            <span className="text-xs text-[#787b86]">
+                                              Size: ${pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') ? (pos.amount * pos.leverage).toFixed(2) : (pos.amount * pos.markPrice).toFixed(2)} ({pos.leverage}x)
+                                            </span>
+                                         </div>
+                                         <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
+                                           <button 
+                                             onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const setTp = prompt(`Set Take Profit for ${pos.symbol} (${pos.side}):`);
+                                                const setSl = prompt(`Set Stop Loss for ${pos.symbol} (${pos.side}):`);
+                                                if (!setTp && !setSl) return;
+                                                try {
+                                                  await axios.post('/api/trade/tpsl', { symbol: pos.symbol, positionSide: pos.side, tp: setTp, sl: setSl });
+                                                  alert("TP/SL updated! ✅");
+                                                  fetchTrades();
+                                                } catch (err: any) { alert("Error: " + (err.response?.data?.error || err.message)); }
+                                             }}
+                                             className="flex-1 bg-[#2a2e39] hover:bg-[#363a45] text-[#d1d4dc] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
+                                           >
+                                             Set TP/SL
+                                           </button>
+                                           <button 
+                                             onClick={async (e) => {
+                                               e.stopPropagation();
+                                               const confirmed = window.confirm(`Close position for ${pos.symbol}?`);
+                                               if(confirmed) {
+                                                 try {
+                                                    const reason = 'User manually closed';
+                                                    await axios.post('/api/trade/close', { symbol: pos.symbol, reason });
+                                                    alert("Closed!");
+                                                    fetchTrades();
+                                                 } catch(err:any) { alert(err.response?.data?.error || err.message); }
+                                               }
+                                             }}
+                                             className="flex-1 bg-[#f23645]/10 hover:bg-[#f23645]/20 text-[#f23645] text-[10px] uppercase font-bold py-1.5 rounded transition-colors"
+                                           >
+                                             Close Pos
+                                           </button>
+                                         </div>
+                                      </div>
+                                   ))}
+                                 </div>
+                               )}
                              </div>
-                           )}
-                         </div>
+                           </>
+                         )}
 
+                         {user?.role !== 'pro' && (
                          <div className="mt-4">
                            <div className="flex justify-between items-end mb-2">
-                              <div className="text-xs text-[#2962ff] font-bold uppercase">Pending Auto-Trades</div>
+                              <div className="text-xs text-[#2962ff] font-bold uppercase">Live Trades & Potential Entries</div>
                               {autoBotBalance !== null && (
                                 <div className="text-[10px] text-[#089981] font-bold bg-[#089981]/10 px-2 py-0.5 rounded">
                                   Bot Budget: ${autoBotBalance.toFixed(2)}
@@ -1279,6 +1284,7 @@ plot(close)"
                              </div>
                            )}
                          </div>
+                         )}
                        </div>
                     ) : rightSidebarTab === 'history' ? (
                        <div className="flex-1 overflow-y-auto no-scrollbar p-3 relative">
@@ -1460,12 +1466,14 @@ plot(close)"
                 >
                   My Profile & Wallet
                 </button>
-                <button 
-                  onClick={() => setSettingsTab('admin')}
-                  className={`whitespace-nowrap text-left px-4 py-2 md:p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'bg-[#131722] md:bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
-                >
-                  Super Admin
-                </button>
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                  <button 
+                    onClick={() => setSettingsTab('admin')}
+                    className={`whitespace-nowrap text-left px-4 py-2 md:p-2 rounded text-sm font-bold transition-colors ${settingsTab === 'admin' ? 'bg-[#2962ff] text-white' : 'bg-[#131722] md:bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-white'}`}
+                  >
+                    Super Admin
+                  </button>
+                )}
              </div>
 
              {/* Settings Content */}
@@ -1621,7 +1629,7 @@ plot(close)"
                          )}
                       </div>
                     </div>
-                 ) : (
+                 ) : settingsTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin') ? (
                    <div className="space-y-6">
                       <div className="bg-[#2962ff]/10 border border-[#2962ff]/30 text-[#2962ff] px-4 py-3 rounded text-sm mb-6 flex items-center gap-2">
                          <Activity className="w-4 h-4" />
@@ -1747,7 +1755,7 @@ plot(close)"
                          </div>
                       </div>
                    </div>
-                )}
+                ) : null}
              </div>
           </div>
         </DialogContent>

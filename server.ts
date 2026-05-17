@@ -159,7 +159,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   let isDbConnected = false;
 
@@ -298,7 +299,7 @@ async function startServer() {
     if (!isDbConnected) return res.status(500).json({error: 'Database is not connected. User registration is disabled.'});
     try {
       const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await User.create({ email, password: hashedPassword, role: role || 'user' });
+      const user = await User.create({ email, password: hashedPassword, role: 'user' });
       res.json({ success: true, message: 'User created' });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -1274,8 +1275,16 @@ async function startServer() {
               // Check if it's decently actionable (entry within 2% of current price)
               const entryDiff = Math.abs(algoResult.entry - currentPrice) / currentPrice;
               
-              // Validate $2 projected profit rule based on $10 margin and 10x leverage
-              const tradeAmountDollars = 10;
+              let engineCfg = null;
+              if (isDbConnected) {
+                  engineCfg = await EngineConfig.findOne({ id: 'global' });
+              }
+              let currentBudget = engineCfg?.autoBotBalance || 100;
+              let computedAmount = currentBudget * 0.10;
+              if (computedAmount < 5) computedAmount = 5;
+              if (computedAmount > currentBudget) computedAmount = currentBudget;
+              const tradeAmountDollars = engineCfg?.tradeAmountFixed || computedAmount;
+              
               const leverage = 10;
               const positionSizeUsdt = tradeAmountDollars * leverage;
               const priceDiff = Math.abs(algoResult.target - algoResult.entry);
@@ -1291,7 +1300,7 @@ async function startServer() {
 
               let recommendedAmount = tradeAmountDollars;
 
-               if (entryDiff < 0.15 && projectedProfit >= 1.0) {
+               if (entryDiff < 0.15 && projectedProfit >= (tradeAmountDollars * 0.05)) { // At least 5% ROE
                  algoResult.timeframe = algoResult.scanInterval || '1h';
                  foundAlerts.push({
                    id: `${pair.symbol}_${algoResult.trend}`,
@@ -1342,15 +1351,20 @@ async function startServer() {
                        ]
                    });
                    if (!existing && activeCount < 10) {
-                       let currentBudget = engineCfg.autoBotBalance || 500;
+                       let currentBudget = engineCfg.autoBotBalance || 100;
                        if (currentBudget <= 5) {
-                           currentBudget = 500; // Reset budget
-                           engineCfg.autoBotBalance = 500;
+                           currentBudget = 100; // Reset budget
+                           engineCfg.autoBotBalance = 100;
                            await engineCfg.save();
                        }
                        
-                       // Full budget allocation per trade, but we divide by 5 to allow max 10 concurrent trades
-                       const tradeAmountDollars = engineCfg.tradeAmountFixed || 10;
+                       // Dynamic position sizing to protect budget! Risk 10% of budget per trade. 
+                       // At 10x leverage and strict SL this is roughly ~2% absolute loss per trade.
+                       let computedAmount = currentBudget * 0.10;
+                       if (computedAmount < 5) computedAmount = 5; // Binance minimum
+                       if (computedAmount > currentBudget) computedAmount = currentBudget;
+                       
+                       const tradeAmountDollars = engineCfg.tradeAmountFixed || computedAmount;
                        const leverage = alert.setupData && alert.setupData.leverage ? alert.setupData.leverage : 10;
                        
                        let activePosSize = tradeAmountDollars * leverage;
@@ -1500,15 +1514,22 @@ async function startServer() {
                      if (signal.trend === 'bullish') {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
-                         if (progress >= 0.6 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.4) {
-                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.4;
-                             closeReason += ' Trailed SL to +40% profit. ';
-                             signal.save().catch(()=>{});
-                         } else if (progress >= 0.3 && signal.stopLoss < signal.entry * 1.005) {
-                             signal.stopLoss = signal.entry * 1.005;
-                             closeReason += ' Trailed SL up safely. ';
-                             signal.save().catch(()=>{});
+                         let updated = false;
+                         if (progress >= 0.7 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.5) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.5;
+                             closeReason += ' Trailed SL to +50% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.5 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.3) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.3;
+                             closeReason += ' Trailed SL to +30% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.25 && signal.stopLoss < signal.entry * 1.002) {
+                             signal.stopLoss = signal.entry * 1.002;
+                             closeReason += ' Trailed SL to Break Even. ';
+                             updated = true;
                          }
+                         if (updated) signal.save().catch(()=>{});
+
                          if (currentPnl <= -10) {
                              outcome = 'loss';
                              pnl = -100 / 10; // -10% meaning 100% loss at 10x
@@ -1529,15 +1550,22 @@ async function startServer() {
                      } else if (signal.trend === 'bearish') {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * 10;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
-                         if (progress >= 0.6 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.4) {
-                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.4;
-                             closeReason += ' Trailed SL to +40% profit. ';
-                             signal.save().catch(()=>{});
-                         } else if (progress >= 0.3 && signal.stopLoss > signal.entry * 0.995) {
-                             signal.stopLoss = signal.entry * 0.995;
-                             closeReason += ' Trailed SL down safely. ';
-                             signal.save().catch(()=>{});
+                         let updated = false;
+                         if (progress >= 0.7 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.5) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.5;
+                             closeReason += ' Trailed SL to +50% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.5 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.3) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.3;
+                             closeReason += ' Trailed SL to +30% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.25 && signal.stopLoss > signal.entry * 0.998) {
+                             signal.stopLoss = signal.entry * 0.998;
+                             closeReason += ' Trailed SL to Break Even. ';
+                             updated = true;
                          }
+                         if (updated) signal.save().catch(()=>{});
+
                          if (currentPnl <= -10) {
                              outcome = 'loss';
                              pnl = -100 / 10;
@@ -1613,15 +1641,21 @@ async function startServer() {
                      let currentPnl = (price - entry) / entry * ut.amount * 10;
                      if (target) userProgress = (price - entry) / (target - entry);
                      
-                     if (userProgress >= 0.6 && ut.stopLoss < entry + (target - entry) * 0.4) {
-                         ut.stopLoss = entry + (target - entry) * 0.4;
-                         closeReason += ' Trailed SL to +40% profit. ';
-                         ut.save().catch(()=>{});
-                     } else if (userProgress >= 0.3 && ut.stopLoss < entry * 1.005) {
-                         ut.stopLoss = entry * 1.005;
-                         closeReason += ' Trailed SL up safely. ';
-                         ut.save().catch(()=>{});
+                     let updated = false;
+                     if (userProgress >= 0.7 && ut.stopLoss < entry + (target - entry) * 0.5) {
+                         ut.stopLoss = entry + (target - entry) * 0.5;
+                         closeReason += ' Trailed SL to +50% profit. ';
+                         updated = true;
+                     } else if (userProgress >= 0.5 && ut.stopLoss < entry + (target - entry) * 0.3) {
+                         ut.stopLoss = entry + (target - entry) * 0.3;
+                         closeReason += ' Trailed SL to +30% profit. ';
+                         updated = true;
+                     } else if (userProgress >= 0.25 && ut.stopLoss < entry * 1.002) {
+                         ut.stopLoss = entry * 1.002;
+                         closeReason += ' Trailed SL to Break Even. ';
+                         updated = true;
                      }
+                     if (updated) ut.save().catch(()=>{});
                      
                      if (currentPnl <= -10) {
                          outcome = 'loss';
@@ -1644,15 +1678,21 @@ async function startServer() {
                      let currentPnl = (entry - price) / entry * ut.amount * 10;
                      if (target) userProgress = (entry - price) / (entry - target);
                      
-                     if (userProgress >= 0.6 && ut.stopLoss > entry - (entry - target) * 0.4) {
-                         ut.stopLoss = entry - (entry - target) * 0.4;
-                         closeReason += ' Trailed SL to +40% profit. ';
-                         ut.save().catch(()=>{});
-                     } else if (userProgress >= 0.3 && ut.stopLoss > entry * 0.995) {
-                         ut.stopLoss = entry * 0.995;
-                         closeReason += ' Trailed SL down safely. ';
-                         ut.save().catch(()=>{});
+                     let updated = false;
+                     if (userProgress >= 0.7 && ut.stopLoss > entry - (entry - target) * 0.5) {
+                         ut.stopLoss = entry - (entry - target) * 0.5;
+                         closeReason += ' Trailed SL to +50% profit. ';
+                         updated = true;
+                     } else if (userProgress >= 0.5 && ut.stopLoss > entry - (entry - target) * 0.3) {
+                         ut.stopLoss = entry - (entry - target) * 0.3;
+                         closeReason += ' Trailed SL to +30% profit. ';
+                         updated = true;
+                     } else if (userProgress >= 0.25 && ut.stopLoss > entry * 0.998) {
+                         ut.stopLoss = entry * 0.998;
+                         closeReason += ' Trailed SL to Break Even. ';
+                         updated = true;
                      }
+                     if (updated) ut.save().catch(()=>{});
                      if (currentPnl <= -10) {
                          outcome = 'loss';
                          realizedPnl = -10;
