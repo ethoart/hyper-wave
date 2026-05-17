@@ -68,6 +68,7 @@ const tradeSignalSchema = new mongoose.Schema({
   target: Number,
   stopLoss: Number,
   amount: { type: Number, default: 10 }, // Auto Paper Trade size: $10
+  termStyle: String,
   setupData: mongoose.Schema.Types.Mixed, // algorithmic context
   status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated', 'expired'], default: 'pending' },
   pnlPercent: Number,
@@ -90,6 +91,7 @@ const userTradeSchema = new mongoose.Schema({
   binanceOrderId: String,
   status: { type: String, enum: ['pending', 'live', 'win', 'loss', 'expired', 'closed'], default: 'pending' },
   isAuto: { type: Boolean, default: false },
+  termStyle: String,
   timestamp: { type: Date, default: Date.now },
   resolvedAt: Date,
   closeReason: String
@@ -579,6 +581,13 @@ async function startServer() {
             if (ms) expiresAt = new Date(Date.now() + ms * 5); // valid for 5 candles
          }
 
+         
+         const termStyle = setupData?.termStyle || 'LONG_TERM';
+         
+         const engineCfg = await EngineConfig.findOne({ id: 'global' });
+         const notifMessage = `🚨 <b>HyperWave Signal</b> 🚨\n\n<b>Pair:</b> ${symbol}\n<b>Action:</b> ${trend === 'bullish' ? 'LONG' : 'SHORT'}\n<b>Style:</b> ${termStyle}\n<b>Entry:</b> ${entry}\n<b>Target:</b> ${target}\n<b>StopLoss:</b> ${slPrice}\n<b>Size ($):</b> ${tradeAmountDollars}\n\n<b>Reasoning:</b>\n${setupData?.reasoning}`;
+         await sendNotification(engineCfg, notifMessage);
+
          await TradeSignal.create({
              symbol,
              trend,
@@ -587,7 +596,8 @@ async function startServer() {
              stopLoss: slPrice,
              amount: tradeAmountDollars,
              setupData,
-             expiresAt
+             expiresAt,
+             termStyle
          });
       }
       res.json({ success: true, message: "Trade signal queued. Waiting for entry." });
@@ -1344,7 +1354,11 @@ async function startServer() {
                        }
                        activePosSize = finalAmount * leverage;
 
-                       const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
+                       const expiresAt = new Date(Date.now() + (alert.termStyle === 'SHORT_TERM' ? 2 : 12) * 60 * 60 * 1000);
+                       
+                       const notifMessage = `🚨 <b>HyperWave Signal</b> 🚨\n\n<b>Pair:</b> ${alert.symbol}\n<b>Action:</b> ${alert.trend === 'bullish' ? 'LONG' : 'SHORT'}\n<b>Style:</b> ${alert.termStyle}\n<b>Entry:</b> ${alert.entry}\n<b>Target:</b> ${alert.target}\n<b>StopLoss:</b> ${activeSl}\n<b>Size ($):</b> ${finalAmount}\n\n<b>Reasoning:</b>\n${alert.reasoning}`;
+                       await sendNotification(engineCfg, notifMessage);
+
                        await TradeSignal.create({
                            symbol: alert.symbol,
                            trend: alert.trend,
@@ -1353,6 +1367,7 @@ async function startServer() {
                            stopLoss: activeSl,
                            amount: finalAmount,
                            expiresAt,
+                           termStyle: alert.termStyle,
                            setupData: { reasoning: alert.reasoning, params: alert }
                        });
 
@@ -1448,8 +1463,9 @@ async function startServer() {
                                               stopLoss: signal.stopLoss,
                                               binanceOrderId: orderTrackingId,
                                               status: 'live',
-                                              isAuto: true
-                                            });
+                                              isAuto: true,
+                                               termStyle: signal.termStyle
+                                             });
                                         }
                                      } catch(err) {
                                         console.error('Failed to place user trade', err);

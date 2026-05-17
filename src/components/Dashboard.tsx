@@ -1149,6 +1149,7 @@ plot(close)"
                                         <div className="flex items-center gap-2">
                                           <span className="font-bold text-white text-sm">
                                               <span className={pos.side === 'BUY' ? 'text-[#089981]' : 'text-[#f23645]'}>{pos.side === 'BUY' ? 'LONG' : 'SHORT'}</span> {pos.symbol}
+                                              {pos.termStyle === 'SHORT_TERM' ? <span className="ml-2 text-[9px] bg-[#f59e0b]/20 text-[#f59e0b] px-1 py-0.5 rounded uppercase tracking-wider">SHORT TERM</span> : pos.termStyle === 'LONG_TERM' ? <span className="ml-2 text-[9px] bg-[#2962ff]/20 text-[#2962ff] px-1 py-0.5 rounded uppercase tracking-wider">LONG TERM</span> : null}
                                           </span>
                                           {pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
                                         </div>
@@ -1218,7 +1219,10 @@ plot(close)"
                                {openTrades.map((trade: any) => (
                                   <div key={trade._id} onClick={() => setSymbol(trade.symbol)} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left cursor-pointer hover:border-[#2962ff] transition-colors relative">
                                      <div className="flex justify-between items-center w-full mb-1">
-                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className="font-bold text-white text-sm">
+ <span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}
+ {trade.termStyle === 'SHORT_TERM' ? <span className="ml-2 text-[9px] bg-[#f59e0b]/20 text-[#f59e0b] px-1 py-0.5 rounded uppercase tracking-wider">SHORT TERM</span> : trade.termStyle === 'LONG_TERM' ? <span className="ml-2 text-[9px] bg-[#2962ff]/20 text-[#2962ff] px-1 py-0.5 rounded uppercase tracking-wider">LONG TERM</span> : null}
+</span>
                                         <div className="flex gap-2 items-center">
                                           {trade.binanceOrderId && trade.binanceOrderId.startsWith('paper_') && <span className="text-[10px] bg-[#ff9800]/20 text-[#ff9800] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-[#ff9800]/50 shadow-[0_0_8px_rgba(255,152,0,0.3)] animate-pulse">PAPER</span>}
                                           <span className="text-xs text-[#787b86]">
@@ -1282,7 +1286,10 @@ plot(close)"
                                {closedTrades.map((trade: any) => (
                                   <div key={trade._id} className="flex flex-col p-3 rounded border border-[#2a2e39] bg-[#1e222d] text-left hover:border-[#2962ff] transition-colors relative group">
                                      <div className="flex justify-between items-center w-full mb-1 cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
-                                        <span className="font-bold text-white text-sm"><span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}</span>
+                                        <span className="font-bold text-white text-sm">
+ <span className={trade.trend === 'bullish' ? 'text-[#089981]' : 'text-[#f23645]'}>{trade.trend === 'bullish' ? 'LONG' : 'SHORT'}</span> {trade.symbol}
+ {trade.termStyle === 'SHORT_TERM' ? <span className="ml-2 text-[9px] bg-[#f59e0b]/20 text-[#f59e0b] px-1 py-0.5 rounded uppercase tracking-wider">SHORT TERM</span> : trade.termStyle === 'LONG_TERM' ? <span className="ml-2 text-[9px] bg-[#2962ff]/20 text-[#2962ff] px-1 py-0.5 rounded uppercase tracking-wider">LONG TERM</span> : null}
+</span>
                                         <div className="flex items-center gap-2">
                                           <button 
                                             onClick={(e) => { e.stopPropagation(); setProfitCard(trade); }}
