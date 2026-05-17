@@ -273,16 +273,16 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             isInvalidated = true; // Trade is over or failed
         }
         
-        // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage (i.e. 2% to 5% max risk)
-        const minSL_price = suggestedEntry * (1 - 0.04); // Max 4% drop
-        const maxSL_price = suggestedEntry * (1 - 0.015); // Min 1.5% drop
+        // Tighter stop loss: 0.5% to 2% max risk
+        const minSL_price = suggestedEntry * (1 - 0.02); // Max 2% drop
+        const maxSL_price = suggestedEntry * (1 - 0.005); // Min 0.5% drop
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
 
-        // Enforce target to be a reasonable Risk/Reward (at least 1.5x up to 4x)
+        // Enforce target to be a better Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget = suggestedEntry * (1 + 0.02); // Min 2% move
-        const maxTarget = suggestedEntry * (1 + 0.06); // Max 6% move
+        const minTarget = suggestedEntry * (1 + 0.03); // Min 3% move
+        const maxTarget = suggestedEntry * (1 + 0.08); // Max 8% move
         if (finalTargetCopy < minTarget) finalTargetCopy = minTarget;
         if (finalTargetCopy > maxTarget) finalTargetCopy = maxTarget;
         
@@ -386,16 +386,16 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             isInvalidated = true; // Trade is over or failed
         }
         
-        // Enforce stop loss to be within $2 to $5 loss based on $10 margin 10x leverage
-        const maxSL_price = suggestedEntry * (1 + 0.04); // Max 4% climb
-        const minSL_price = suggestedEntry * (1 + 0.015); // Min 1.5% climb
+        // Tighter stop loss: 0.5% to 2% max risk
+        const maxSL_price = suggestedEntry * (1 + 0.02); // Max 2% climb
+        const minSL_price = suggestedEntry * (1 + 0.005); // Min 0.5% climb
         if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
         if (validStopLoss < minSL_price) validStopLoss = minSL_price;
 
-        // Enforce target to be a reasonable Risk/Reward
+        // Enforce target to be a better Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget_b = suggestedEntry * (1 - 0.02); // Min 2% drop
-        const maxTarget_b = suggestedEntry * (1 - 0.06); // Max 6% drop
+        const minTarget_b = suggestedEntry * (1 - 0.03); // Min 3% drop
+        const maxTarget_b = suggestedEntry * (1 - 0.08); // Max 8% drop
         if (finalTargetCopy > minTarget_b) finalTargetCopy = minTarget_b;
         if (finalTargetCopy < maxTarget_b) finalTargetCopy = maxTarget_b;
 

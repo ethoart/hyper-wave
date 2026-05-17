@@ -555,6 +555,18 @@ export function Dashboard() {
      }
   };
 
+  const handleResetBudget = async () => {
+    if (!confirm('Are you sure you want to reset the budget to $100 and close all active automated trades?')) return;
+    try {
+      const res = await axios.get('/api/admin/reset-budget');
+      alert(`Budget reset successfully to $${res.data.newBalance}`);
+      addNotification("Global budget reset to $100");
+      fetchTrades();
+    } catch(err: any) {
+      alert(err.response?.data?.error || err.message);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const res = await axios.get('/api/users');
@@ -1714,6 +1726,15 @@ plot(close)"
                                 <option value="AUTO_OPTIMIZED">AUTO OPTIMIZED (Dynamic Selection via Gemini AI & Stats)</option>
                              </select>
                              <p className="text-[#a3a6af] text-[10px] mt-2">Changes apply to the next automatic engine scan cycle (every 2 mins).</p>
+                             
+                             <div className="mt-4 pt-4 border-t border-[#2a2e39]">
+                               <button 
+                                 onClick={handleResetBudget}
+                                 className="w-full bg-[#f23645]/10 hover:bg-[#f23645]/20 text-[#f23645] border border-[#f23645]/30 font-bold py-2 px-4 rounded text-sm transition-colors"
+                               >
+                                 Reset Budget & Close All Auto-Trades
+                               </button>
+                             </div>
                          </div>
                       </div>
 

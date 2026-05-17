@@ -743,6 +743,24 @@ async function startServer() {
     res.json({ newBalance: cfg.autoBotBalance });
   });
 
+  app.get('/api/admin/reset-budget', async (req: any, res) => {
+    try {
+      let cfg = await EngineConfig.findOne({ id: 'global' });
+      if (!cfg) { cfg = new EngineConfig({ id: 'global', autoBotBalance: 100 }); }
+      cfg.autoBotBalance = 100;
+      await cfg.save();
+
+      // Close all active automated trades to secure the new start
+      await TradeSignal.updateMany({ status: { $in: ['pending', 'live'] } }, {
+         $set: { status: 'invalidated', resolvedAt: new Date(), closeReason: 'Budget reset by logic' }
+      });
+      console.log("Budget reset to $100 and old trades closed.");
+      res.json({ success: true, newBalance: cfg.autoBotBalance });
+    } catch(err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/market/scan', async (req: any, res) => {
     try {
       // 24hr ticker to find top pairs from Binance Futures
