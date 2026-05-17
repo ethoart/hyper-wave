@@ -1156,7 +1156,9 @@ plot(close)"
                                      </div>
                                      <div className="flex justify-between items-center w-full mb-1">
                                         <span className="text-xs text-[#787b86]">Entry: {pos.entryPrice.toFixed(4)}</span>
-                                        <span className="text-xs text-[#787b86]">Size: {pos.amount} ({pos.leverage}x)</span>
+                                        <span className="text-xs text-[#787b86]">
+                                          Size: ${pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') ? (pos.amount * pos.leverage).toFixed(2) : (pos.amount * pos.markPrice).toFixed(2)} ({pos.leverage}x)
+                                        </span>
                                      </div>
                                      <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
                                        <button 
@@ -1305,8 +1307,11 @@ plot(close)"
                                      </div>
                                      )}
                                      <div className="flex justify-between items-center w-full cursor-pointer" onClick={() => setSymbol(trade.symbol)}>
-                                        <span className="text-xs text-[#787b86]">Realized:</span>
-                                        <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
+                                        <span className="text-[10px] text-[#787b86]">Amt: ${trade.amount}</span>
+                                        <div className="flex gap-1 items-center">
+                                           <span className="text-xs text-[#787b86]">Realized:</span>
+                                           <span className={`text-xs font-bold ${trade.realizedPnl > 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>${(trade.realizedPnl || 0).toFixed(2)} ({trade.pnlPercent?.toFixed(2)}%)</span>
+                                        </div>
                                      </div>
                                      {trade.closeReason && (
                                         <div className="mt-1 flex items-start gap-1 p-1 bg-[#1e222d] border border-[#2a2e39] rounded text-[9px] text-[#b2b5be]">
