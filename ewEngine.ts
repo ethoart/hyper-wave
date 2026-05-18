@@ -262,7 +262,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       if (Math.abs(ext3 - idealExt3) < 0.2) score += 30;
 
       const retrace4 = (w3 - w4) / len3;
-      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
+      if (retrace4 >= 0.236 && retrace4 <= 0.618) score += 20;
       if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
@@ -275,7 +275,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 + 0.618 * (w3 - start);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w4 * 0.99; // Much tighter SL: 1% below Wave 4 base
+        let validStopLoss = w1 * 0.99; // SL just below Wave 1 peak (structural invalidation)
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -294,6 +294,13 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         
         let finalTargetCopy = finalTarget;
         
+        // Risk/Reward enforcing
+        const risk = suggestedEntry - validStopLoss;
+        const reward = finalTargetCopy - suggestedEntry;
+        if (risk <= 0 || reward / risk < 1.5) {
+            isInvalidated = true; // RR < 1.5 is skipped
+        }
+
         // Only accept if not invalidated securely
         if (!isInvalidated && currentPrice <= validStopLoss) {
             isInvalidated = true; // recheck with clamped SL
@@ -371,7 +378,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       if (Math.abs(ext3 - idealExt3) < 0.2) score += 30;
 
       const retrace4 = (w4 - w3) / len3;
-      if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
+      if (retrace4 >= 0.236 && retrace4 <= 0.618) score += 20;
       if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
@@ -384,7 +391,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 - 0.618 * (start - w3);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w4 * 1.01; // Much tighter SL: 1% above Wave 4 peak
+        let validStopLoss = w1 * 1.01; // SL just above Wave 1 trough (structural invalidation)
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -402,6 +409,13 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         }
         
         let finalTargetCopy = finalTarget;
+
+        // Risk/Reward enforcing
+        const risk = validStopLoss - suggestedEntry;
+        const reward = suggestedEntry - finalTargetCopy;
+        if (risk <= 0 || reward / risk < 1.5) {
+            isInvalidated = true; // RR < 1.5 is skipped
+        }
 
         // Check if clamped SL invalidates the trade
         if (!isInvalidated && currentPrice >= validStopLoss) {
@@ -447,6 +461,12 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
   if (!bestSetup || highestScore < 100) {
     return null; // Return null instead of taking a weak highly risky fallback
+  }
+
+  // Enforce STRICT confirmation boundary for short term scalps based on user request
+  // Requires at least 130 score = Multiple mathematical confirmations of retracements and extensions
+  if (bestSetup.termStyle === 'SCALP' && highestScore < 130) {
+      return null; 
   }
 
   return bestSetup;

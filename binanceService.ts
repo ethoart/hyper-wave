@@ -101,23 +101,9 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
 
     await new Promise(r => setTimeout(r, 1000)); // wait for market order to fill
 
-    // Place Stop Loss order if provided
-    if (finalSL) {
-      const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-      const slTimestamp = Date.now();
-      let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&recvWindow=5000&timestamp=${slTimestamp}`;
-      const slSig = createSignature(slQuery, secretKey);
-      await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.error('SL failed', e.response?.data));
-    }
-
-    // Place Take Profit order if provided
-    if (finalTP) {
-      const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
-      const tpTimestamp = Date.now();
-      let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&recvWindow=5000&timestamp=${tpTimestamp}`;
-      const tpSig = createSignature(tpQuery, secretKey);
-      await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }).catch(e => console.error('TP failed', e.response?.data));
-    }
+    // Native Binance Stop Loss / Take profit placement is Disabled.
+    // The server cron natively tracks, mathematically trails the Stop Loss,
+    // and natively closes the position using trailing Logic to keep in perfect sync.
 
     return response.data;
   } catch (error: any) {
