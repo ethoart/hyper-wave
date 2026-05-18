@@ -1349,13 +1349,8 @@ plot(close)"
                                         </div>
                                      </div>
                                      {trade.closeReason && (
-                                        <div className="mt-1 flex items-start gap-1 p-1 bg-[#1e222d] border border-[#2a2e39] rounded text-[9px] text-[#b2b5be]">
-                                           <strong>Closed:</strong> <span>{trade.closeReason}</span>
-                                        </div>
-                                     )}
-                                     {trade.closeReason && (
-                                        <div className="mt-1 flex items-start gap-1 p-1 bg-[#1e222d] border border-[#2a2e39] rounded text-[9px] text-[#b2b5be]">
-                                           <strong>Closed:</strong> <span>{trade.closeReason}</span>
+                                        <div className="mt-2 flex items-start gap-1 p-2 bg-[rgba(242,54,69,0.05)] border border-[rgba(242,54,69,0.2)] rounded text-[10px] text-[#b2b5be] leading-relaxed">
+                                           <strong className="text-[#f23645] uppercase text-[9px]">Exit Reason:</strong> <span>{trade.closeReason}</span>
                                         </div>
                                      )}
                                      {trade.setupData && trade.setupData.reasoning && (

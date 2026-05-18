@@ -85,7 +85,7 @@ const tradeSignalSchema = new mongoose.Schema({
   amount: { type: Number, default: 10 }, // Auto Paper Trade size: $10
   termStyle: String,
   setupData: mongoose.Schema.Types.Mixed, // algorithmic context
-  status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated', 'expired'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'win', 'loss', 'invalidated', 'expired', 'closed'], default: 'pending' },
   pnlPercent: Number,
   realizedPnl: Number,
   resolvedAt: Date,
@@ -1529,65 +1529,79 @@ async function startServer() {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
                          let updated = false;
-                         if (progress >= 0.85 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.5) {
-                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.5;
-                             closeReason += ' Trailed SL to +50% profit. ';
+                         if (progress >= 0.85 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.6) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.6;
+                             closeReason += ' Trailed SL to +60% profit. ';
                              updated = true;
-                         } else if (progress >= 0.65 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.2) {
-                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.2;
-                             closeReason += ' Trailed SL to +20% profit. ';
+                         } else if (progress >= 0.70 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.3) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.3;
+                             closeReason += ' Trailed SL to +30% profit. ';
                              updated = true;
-                         } else if (progress >= 0.4 && signal.stopLoss < signal.entry * 1.002) {
-                             signal.stopLoss = signal.entry * 1.002;
+                         } else if (progress >= 0.50 && signal.stopLoss < signal.entry * 1.001) {
+                             signal.stopLoss = signal.entry * 1.001;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
                          }
                          if (updated) signal.save().catch(()=>{});
 
-                         if (currentPnl <= -(signal.amount || 10) * 0.5) {
+                         if (currentPnl <= -(signal.amount || 10) * 1.2) {
                              outcome = 'loss';
-                             pnl = -50 / curLeverage; // -50% loss at 10x
-                             closeReason += 'Maximum loss threshold hit (-50% of margin).';
+                             pnl = -120 / curLeverage; // -120% loss at 10x
+                             closeReason += 'Maximum loss threshold hit (-120% of margin/Liquidation).';
                          } else if (highPrice >= signal.target) {
                              outcome = 'win';
                              pnl = (signal.target - signal.entry) / signal.entry * 100;
                              closeReason += 'Target price reached.';
                          } else if (lowPrice <= signal.stopLoss) {
-                             outcome = signal.stopLoss > signal.entry ? 'win' : 'loss';
-                             pnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
-                             closeReason += signal.stopLoss > signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                             let projectedPnl = (signal.stopLoss - signal.entry) / signal.entry * 100;
+                             if (Math.abs((projectedPnl/100) * (signal.amount || 10) * curLeverage) <= 0.6) {
+                                 outcome = 'closed';
+                                 pnl = projectedPnl;
+                                 closeReason += 'Capital Protected (Break Even/Scratched).';
+                             } else {
+                                 outcome = signal.stopLoss > signal.entry ? 'win' : 'loss';
+                                 pnl = projectedPnl;
+                                 closeReason += signal.stopLoss > signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                             }
                          }
                      } else if (signal.trend === 'bearish') {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
                          let updated = false;
-                         if (progress >= 0.85 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.5) {
-                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.5;
-                             closeReason += ' Trailed SL to +50% profit. ';
+                         if (progress >= 0.85 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.6) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.6;
+                             closeReason += ' Trailed SL to +60% profit. ';
                              updated = true;
-                         } else if (progress >= 0.65 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.2) {
-                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.2;
-                             closeReason += ' Trailed SL to +20% profit. ';
+                         } else if (progress >= 0.70 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.3) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.3;
+                             closeReason += ' Trailed SL to +30% profit. ';
                              updated = true;
-                         } else if (progress >= 0.4 && signal.stopLoss > signal.entry * 0.998) {
-                             signal.stopLoss = signal.entry * 0.998;
+                         } else if (progress >= 0.50 && signal.stopLoss > signal.entry * 0.999) {
+                             signal.stopLoss = signal.entry * 0.999;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
                          }
                          if (updated) signal.save().catch(()=>{});
 
-                         if (currentPnl <= -(signal.amount || 10) * 0.5) {
+                         if (currentPnl <= -(signal.amount || 10) * 1.2) {
                              outcome = 'loss';
-                             pnl = -50 / curLeverage;
-                             closeReason += 'Maximum loss threshold hit (-50% of margin).';
+                             pnl = -120 / curLeverage;
+                             closeReason += 'Maximum loss threshold hit (-120% of margin/Liquidation).';
                          } else if (lowPrice <= signal.target) {
                              outcome = 'win';
                              pnl = (signal.entry - signal.target) / signal.entry * 100;
                              closeReason += 'Target price reached.';
                          } else if (highPrice >= signal.stopLoss) {
-                             outcome = signal.stopLoss < signal.entry ? 'win' : 'loss';
-                             pnl = (signal.entry - signal.stopLoss) / signal.entry * 100;
-                             closeReason += signal.stopLoss < signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                             let projectedPnl = (signal.entry - signal.stopLoss) / signal.entry * 100;
+                             if (Math.abs((projectedPnl/100) * (signal.amount || 10) * curLeverage) <= 0.6) {
+                                 outcome = 'closed';
+                                 pnl = projectedPnl;
+                                 closeReason += 'Capital Protected (Break Even/Scratched).';
+                             } else {
+                                 outcome = signal.stopLoss < signal.entry ? 'win' : 'loss';
+                                 pnl = projectedPnl;
+                                 closeReason += signal.stopLoss < signal.entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                             }
                          }
                     }
                 }
@@ -1607,6 +1621,7 @@ async function startServer() {
                     }
                     signal.status = outcome;
                     signal.pnlPercent = pnl;
+                    signal.closeReason = closeReason;
                     const leverage = signal.setupData && signal.setupData.leverage ? signal.setupData.leverage : 10;
                     signal.realizedPnl = (signal.amount || 10) * leverage * (pnl / 100);
                     // Handle compounding
@@ -1653,65 +1668,79 @@ async function startServer() {
                      if (target) userProgress = (price - entry) / (target - entry);
                      
                      let updated = false;
-                     if (userProgress >= 0.85 && ut.stopLoss < entry + (target - entry) * 0.5) {
-                         ut.stopLoss = entry + (target - entry) * 0.5;
-                         closeReason += ' Trailed SL to +50% profit. ';
+                     if (userProgress >= 0.85 && ut.stopLoss < entry + (target - entry) * 0.6) {
+                         ut.stopLoss = entry + (target - entry) * 0.6;
+                         closeReason += ' Trailed SL to +60% profit. ';
                          updated = true;
-                     } else if (userProgress >= 0.65 && ut.stopLoss < entry + (target - entry) * 0.2) {
-                         ut.stopLoss = entry + (target - entry) * 0.2;
-                         closeReason += ' Trailed SL to +20% profit. ';
+                     } else if (userProgress >= 0.70 && ut.stopLoss < entry + (target - entry) * 0.3) {
+                         ut.stopLoss = entry + (target - entry) * 0.3;
+                         closeReason += ' Trailed SL to +30% profit. ';
                          updated = true;
-                     } else if (userProgress >= 0.4 && ut.stopLoss < entry * 1.002) {
-                         ut.stopLoss = entry * 1.002;
+                     } else if (userProgress >= 0.50 && ut.stopLoss < entry * 1.001) {
+                         ut.stopLoss = entry * 1.001;
                          closeReason += ' Trailed SL to Break Even. ';
                          updated = true;
                      }
                      if (updated) ut.save().catch(()=>{});
                      
-                     if (currentPnl <= -10) {
+                     if (currentPnl <= -20) {
                          outcome = 'loss';
-                         realizedPnl = -10;
-                         closeReason += 'Maximum loss threshold hit (-100%).';
+                         realizedPnl = -20;
+                         closeReason += 'Maximum loss threshold hit (-200%).';
                      } else if (target && highPrice >= target) {
                          outcome = 'win';
                          realizedPnl = (target - entry) / entry * ut.amount * 10;
                          closeReason += 'Target price reached.';
                      } else if (ut.stopLoss && lowPrice <= ut.stopLoss) {
-                         outcome = ut.stopLoss > entry ? 'win' : 'loss';
-                         realizedPnl = (ut.stopLoss - entry) / entry * ut.amount * 10;
-                         closeReason += ut.stopLoss > entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                         let calcPnl = (ut.stopLoss - entry) / entry * ut.amount * 10;
+                         if (Math.abs(calcPnl) <= 0.6) {
+                             outcome = 'closed';
+                             realizedPnl = calcPnl;
+                             closeReason += 'Capital Protected (Break Even/Scratched).';
+                         } else {
+                             outcome = ut.stopLoss > entry ? 'win' : 'loss';
+                             realizedPnl = calcPnl;
+                             closeReason += ut.stopLoss > entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                         }
                      }
                  } else if (ut.side === 'SELL') {
                      let currentPnl = (entry - price) / entry * ut.amount * 10;
                      if (target) userProgress = (entry - price) / (entry - target);
                      
                      let updated = false;
-                     if (userProgress >= 0.85 && ut.stopLoss > entry - (entry - target) * 0.5) {
-                         ut.stopLoss = entry - (entry - target) * 0.5;
-                         closeReason += ' Trailed SL to +50% profit. ';
+                     if (userProgress >= 0.85 && ut.stopLoss > entry - (entry - target) * 0.6) {
+                         ut.stopLoss = entry - (entry - target) * 0.6;
+                         closeReason += ' Trailed SL to +60% profit. ';
                          updated = true;
-                     } else if (userProgress >= 0.65 && ut.stopLoss > entry - (entry - target) * 0.2) {
-                         ut.stopLoss = entry - (entry - target) * 0.2;
-                         closeReason += ' Trailed SL to +20% profit. ';
+                     } else if (userProgress >= 0.70 && ut.stopLoss > entry - (entry - target) * 0.3) {
+                         ut.stopLoss = entry - (entry - target) * 0.3;
+                         closeReason += ' Trailed SL to +30% profit. ';
                          updated = true;
-                     } else if (userProgress >= 0.4 && ut.stopLoss > entry * 0.998) {
-                         ut.stopLoss = entry * 0.998;
+                     } else if (userProgress >= 0.50 && ut.stopLoss > entry * 0.999) {
+                         ut.stopLoss = entry * 0.999;
                          closeReason += ' Trailed SL to Break Even. ';
                          updated = true;
                      }
                      if (updated) ut.save().catch(()=>{});
-                     if (currentPnl <= -10) {
+                     if (currentPnl <= -20) {
                          outcome = 'loss';
-                         realizedPnl = -10;
-                         closeReason += 'Maximum loss threshold hit (-100%).';
+                         realizedPnl = -20;
+                         closeReason += 'Maximum loss threshold hit (-200%).';
                      } else if (target && lowPrice <= target) {
                          outcome = 'win';
                          realizedPnl = (entry - target) / entry * ut.amount * 10;
                          closeReason += 'Target price reached.';
                      } else if (ut.stopLoss && highPrice >= ut.stopLoss) {
-                         outcome = ut.stopLoss < entry ? 'win' : 'loss';
-                         realizedPnl = (entry - ut.stopLoss) / entry * ut.amount * 10;
-                         closeReason += ut.stopLoss < entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                         let calcPnl = (entry - ut.stopLoss) / entry * ut.amount * 10;
+                         if (Math.abs(calcPnl) <= 0.6) {
+                             outcome = 'closed';
+                             realizedPnl = calcPnl;
+                             closeReason += 'Capital Protected (Break Even/Scratched).';
+                         } else {
+                             outcome = ut.stopLoss < entry ? 'win' : 'loss';
+                             realizedPnl = calcPnl;
+                             closeReason += ut.stopLoss < entry ? 'Stopped out in profit (Trailing SL).' : 'Stop loss hit.';
+                         }
                      }
                  }
                  
