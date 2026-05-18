@@ -567,17 +567,6 @@ async function startServer() {
       } else {
           rawLossUsdt = (positionSizeUsdt / entryPrice) * (slPrice - entryPrice);
       }
-
-      // Clamp stop loss so that max loss is exactly $4.00 if it exceeds it or if it's less than $2.00
-      if (rawLossUsdt > 5 || rawLossUsdt < 2) {
-          const targetLoss = Math.min(Math.max(rawLossUsdt, 2), 4.5); // strictly between $2 and $4.50
-          const allowedPriceDiff = (targetLoss / positionSizeUsdt) * entryPrice;
-          if (trend === 'bullish') {
-              slPrice = entryPrice - allowedPriceDiff;
-          } else {
-              slPrice = entryPrice + allowedPriceDiff;
-          }
-      }
       
       // Calculate projected profit based on position size
       const priceDiff = Math.abs(targetPrice - entryPrice);
@@ -774,7 +763,7 @@ async function startServer() {
         parseFloat(d.quoteVolume) > 1000000 // allow small pairs too
       );
       
-      data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
+      data.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
       const topPairs = data.slice(0, 5).map((bestPair: any) => ({
         symbol: bestPair.symbol,
         change: bestPair.priceChangePercent,
@@ -1203,7 +1192,7 @@ async function startServer() {
       const data = response.data.filter((d: any) => 
         d.symbol.endsWith('USDT') && d.symbol !== 'USUSDT' && !['USDC', 'FDUSD', 'TUSD', 'BUSD', 'EUR', 'USDP'].some(s => d.symbol.includes(s)) && parseFloat(d.quoteVolume) > 1000000
       );
-      data.sort((a: any, b: any) => Math.abs(parseFloat(b.priceChangePercent)) - Math.abs(parseFloat(a.priceChangePercent)));
+      data.sort((a: any, b: any) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
       
       const topPairs = data.slice(0, 10);
       let foundAlerts = [];

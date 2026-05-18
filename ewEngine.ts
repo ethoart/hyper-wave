@@ -100,9 +100,17 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
      }
   }
 
+  let ema200 = data[0].close;
   if (data.length > 50) {
-     const ema20 = data.slice(-20).reduce((acc, d) => acc + d.close, 0) / 20;
-     const ema50 = data.slice(-50).reduce((acc, d) => acc + d.close, 0) / 50;
+     let ema20 = data[0].close; const k20 = 2 / 21;
+     let ema50 = data[0].close; const k50 = 2 / 51;
+     const k200 = 2 / 201;
+
+     for (let i = 1; i < data.length; i++) {
+         ema20 = (data[i].close - ema20) * k20 + ema20;
+         ema50 = (data[i].close - ema50) * k50 + ema50;
+         ema200 = (data[i].close - ema200) * k200 + ema200;
+     }
      
      if (ema20 > ema50) {
          confirmations.push("✅ TREND CONFIRMATION: Fast MA (20) > Slow MA (50) (Bullish Momentum).");
@@ -230,6 +238,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       // Basic directional checks - if it's completely wrong direction, then skip
       if (w1 <= start || w3 <= w2) continue;
 
+      if (ema200 && w4 < ema200) continue; // Bullish needs price > 200 EMA
+
       if (w2 <= start) continue; // W2 must not go below start
       if (w4 <= w1 * 0.99) continue; // W4 shouldn't overlap W1 too much
       if (w3 <= w1) continue; // W3 must be higher than W1 for impulse
@@ -255,7 +265,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
       if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
-      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
       score += recencyBoost;
 
       if (score > highestScore) {
@@ -282,18 +292,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             isInvalidated = true; // Trade is over or failed
         }
         
-        // Tighter stop loss: 0.5% to 2% max risk
-        const minSL_price = suggestedEntry * (1 - 0.02); // Max 2% drop
-        const maxSL_price = suggestedEntry * (1 - 0.005); // Min 0.5% drop
-        if (validStopLoss < minSL_price) validStopLoss = minSL_price;
-        if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
-
-        // Enforce target to be a better Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget = suggestedEntry * (1 + 0.03); // Min 3% move
-        const maxTarget = suggestedEntry * (1 + 0.08); // Max 8% move
-        if (finalTargetCopy < minTarget) finalTargetCopy = minTarget;
-        if (finalTargetCopy > maxTarget) finalTargetCopy = maxTarget;
         
         // Only accept if not invalidated securely
         if (!isInvalidated && currentPrice <= validStopLoss) {
@@ -304,7 +303,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            const recLeverage = Math.floor(Math.max(3, Math.min(50, (score / 100) * 50)));
+            const recLeverage = Math.floor(Math.max(3, Math.min(10, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -348,6 +347,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       
       if (w1 >= start || w3 >= w2) continue; // Basic directional check
 
+      if (ema200 && w4 > ema200) continue; // Bearish needs price < 200 EMA
+
       if (w2 >= start) continue; // W2 must not go above start
       if (w4 >= w1 * 1.01) continue; // W4 shouldn't overlap W1 too much
       if (w3 >= w1) continue; // W3 must be lower than W1 for impulse
@@ -373,7 +374,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       if (retrace4 >= 0.236 && retrace4 <= 0.5) score += 20;
       if (Math.abs(retrace4 - idealRetrace4) < 0.1) score += 30;
 
-      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 100; // Lower recency impact
+      const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
       score += recencyBoost;
 
       if (score > highestScore) {
@@ -400,18 +401,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             isInvalidated = true; // Trade is over or failed
         }
         
-        // Tighter stop loss: 0.5% to 2% max risk
-        const maxSL_price = suggestedEntry * (1 + 0.02); // Max 2% climb
-        const minSL_price = suggestedEntry * (1 + 0.005); // Min 0.5% climb
-        if (validStopLoss > maxSL_price) validStopLoss = maxSL_price;
-        if (validStopLoss < minSL_price) validStopLoss = minSL_price;
-
-        // Enforce target to be a better Risk/Reward
         let finalTargetCopy = finalTarget;
-        const minTarget_b = suggestedEntry * (1 - 0.03); // Min 3% drop
-        const maxTarget_b = suggestedEntry * (1 - 0.08); // Max 8% drop
-        if (finalTargetCopy > minTarget_b) finalTargetCopy = minTarget_b;
-        if (finalTargetCopy < maxTarget_b) finalTargetCopy = maxTarget_b;
 
         // Check if clamped SL invalidates the trade
         if (!isInvalidated && currentPrice >= validStopLoss) {
@@ -422,7 +412,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            const recLeverage = Math.floor(Math.max(3, Math.min(50, (score / 100) * 50)));
+            const recLeverage = Math.floor(Math.max(3, Math.min(10, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -455,7 +445,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     }
   }
 
-  if (!bestSetup || highestScore < 50) {
+  if (!bestSetup || highestScore < 100) {
     return null; // Return null instead of taking a weak highly risky fallback
   }
 
