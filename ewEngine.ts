@@ -55,8 +55,8 @@ export function findPivots(data: Kline[], left: number = 3, right: number = 3): 
 }
 
 export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlParams?: any) {
-  let rsiDivergence = "";
-  let confirmations = [];
+  let bullishConfirmations: string[] = [];
+  let bearishConfirmations: string[] = [];
   
   if (data.length > 30) {
      const period = 14;
@@ -82,11 +82,12 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
      
      const rsiRecent = rsiValues[rsiValues.length - 1];
      if (rsiRecent > 70) {
-         confirmations.push("⚠️ RSI is OVERBOUGHT (" + Math.round(rsiRecent) + "), suggesting potential exhaustion if bullish.");
+         bearishConfirmations.push("⚠️ RSI is OVERBOUGHT (" + Math.round(rsiRecent) + "), suggesting potential exhaustion if bullish.");
      } else if (rsiRecent < 30) {
-         confirmations.push("⚠️ RSI is OVERSOLD (" + Math.round(rsiRecent) + "), suggesting potential bounce if bearish.");
+         bullishConfirmations.push("⚠️ RSI is OVERSOLD (" + Math.round(rsiRecent) + "), suggesting potential bounce if bearish.");
      } else {
-         confirmations.push("✅ RSI is NEUTRAL (" + Math.round(rsiRecent) + "), providing room for trend continuation.");
+         bullishConfirmations.push("✅ RSI is NEUTRAL (" + Math.round(rsiRecent) + "), providing room for trend continuation.");
+         bearishConfirmations.push("✅ RSI is NEUTRAL (" + Math.round(rsiRecent) + "), providing room for trend continuation.");
      }
 
      const rsiOld = rsiValues[Math.max(0, rsiValues.length - 20)];
@@ -94,9 +95,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
      const priceOld = data[Math.max(0, data.length - 20)].close;
      
      if (priceRecent < priceOld && rsiRecent > rsiOld + 5) {
-         confirmations.push("✅ BULLISH RSI DIVERGENCE: Price made a lower low but RSI made a higher low.");
+         bullishConfirmations.push("✅ BULLISH RSI DIVERGENCE: Price made a lower low but RSI made a higher low.");
      } else if (priceRecent > priceOld && rsiRecent < rsiOld - 5) {
-         confirmations.push("✅ BEARISH RSI DIVERGENCE: Price made a higher high but RSI made a lower high.");
+         bearishConfirmations.push("✅ BEARISH RSI DIVERGENCE: Price made a higher high but RSI made a lower high.");
      }
   }
 
@@ -113,19 +114,21 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
      }
      
      if (ema20 > ema50) {
-         confirmations.push("✅ TREND CONFIRMATION: Fast MA (20) > Slow MA (50) (Bullish Momentum).");
+         bullishConfirmations.push("✅ TREND CONFIRMATION: Fast MA (20) > Slow MA (50) (Bullish Momentum).");
      } else {
-         confirmations.push("✅ TREND CONFIRMATION: Fast MA (20) < Slow MA (50) (Bearish Momentum).");
+         bearishConfirmations.push("✅ TREND CONFIRMATION: Fast MA (20) < Slow MA (50) (Bearish Momentum).");
      }
      
      const recentVol = data.slice(-5).reduce((acc, d) => acc + d.volume, 0) / 5;
      const oldVol = data.slice(-20, -5).reduce((acc, d) => acc + d.volume, 0) / 15;
      if (recentVol > oldVol * 1.5) {
-         confirmations.push("✅ VOLUME: Significant volume spike detected (" + (recentVol/oldVol).toFixed(1) + "x average).");
+         bullishConfirmations.push("✅ VOLUME: Significant volume spike detected (" + (recentVol/oldVol).toFixed(1) + "x average).");
+         bearishConfirmations.push("✅ VOLUME: Significant volume spike detected (" + (recentVol/oldVol).toFixed(1) + "x average).");
      }
   }
 
-  rsiDivergence = confirmations.length > 0 ? "\n\nMULTIPLE CONFIRMATIONS:\n- " + confirmations.join("\n- ") : "";
+  const getBullishDivergence = () => bullishConfirmations.length > 0 ? "\n\nMULTIPLE CONFIRMATIONS:\n- " + bullishConfirmations.join("\n- ") : "";
+  const getBearishDivergence = () => bearishConfirmations.length > 0 ? "\n\nMULTIPLE CONFIRMATIONS:\n- " + bearishConfirmations.join("\n- ") : "";
 
   const pivots = findPivots(data, 8, 5); // Faster reaction to structural shifts
   
@@ -141,8 +144,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   let bestSetup: any = null;
   let highestScore = -999999;
   
-  if (tradeStyle === "SCALP TRADE" && confirmations.length < 2) {
-       return null; // Enforce multiple confirmations for scalps
+  if (tradeStyle === "SCALP TRADE") {
+       // Only enforce later
   }
 
   // Find optimal parameters learned from ML, otherwise default
@@ -213,7 +216,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       tradeStyle,
       termStyle,
       gainPct,
-      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Statistical momentum continuation setup detected (Mean-Reversion Fallback).\n\nTARGET JUSTIFICATION: The algorithm targets ${target.toFixed(4)} to secure early profits before the momentum exhausts.\n\nSTOP LOSS: Capital protection placed at ${stop.toFixed(4)}. Evaluated strictly to cut losses early if market structure flips against the intended trend momentum.\n\nAUTO SECURE: Algorithm aggressively trails stops into profit.${rsiDivergence}`
+      reasoning: `[${tradeStyle} | ${isBull ? 'BULLISH' : 'BEARISH'} | PREDICTED GAIN: ${gainPct}%] Statistical momentum continuation setup detected (Mean-Reversion Fallback).\n\nTARGET JUSTIFICATION: The algorithm targets ${target.toFixed(4)} to secure early profits before the momentum exhausts.\n\nSTOP LOSS: Capital protection placed at ${stop.toFixed(4)}. Evaluated strictly to cut losses early if market structure flips against the intended trend momentum.\n\nAUTO SECURE: Algorithm aggressively trails stops into profit.${isBull ? getBullishDivergence() : getBearishDivergence()}`
     };
   }
 
@@ -267,6 +270,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
       score += recencyBoost;
+      score += bullishConfirmations.length * 15;
+      
+      if (tradeStyle === "SCALP TRADE" && bullishConfirmations.length < 2) continue;
 
       if (score > highestScore) {
         highestScore = score;
@@ -275,7 +281,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 + 0.618 * (w3 - start);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w1 * 0.99; // SL just below Wave 1 peak (structural invalidation)
+        let validStopLoss = w4 * 0.985; // SL below Wave 4
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -287,9 +293,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             const moveDone = (currentPrice - w4) / (finalTarget - w4);
             if (moveDone > 0.3) {
                 isInvalidated = true; // Too late, missed the run
+                console.log(`[EW] Invalidated: Too late. moveDone=${moveDone}`);
             }
         } else if (currentPrice >= finalTarget || currentPrice <= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
+            console.log(`[EW] Invalidated: Price beyond target/SL. currentPrice=${currentPrice}, finalTarget=${finalTarget}, SL=${validStopLoss}`);
         }
         
         let finalTargetCopy = finalTarget;
@@ -297,8 +305,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = suggestedEntry - validStopLoss;
         const reward = finalTargetCopy - suggestedEntry;
-        if (risk <= 0 || reward / risk < 1.5) {
-            isInvalidated = true; // RR < 1.5 is skipped
+        if (risk <= 0 || reward / risk < 0.8) {
+            isInvalidated = true; // RR < 0.8 is skipped
+            console.log(`[EW] Invalidated: RR < 0.8. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Only accept if not invalidated securely
@@ -336,7 +345,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               tradeStyle,
       termStyle,
       gainPct,
-              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is generated based on a Wave 5 mathematical extension to maximize the risk/reward ratio while securing optimal algorithmic probability.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} strictly below the exhaustion support line (Wave 4 base) to instantly invalidate the setup and protect capital if the market flips bearish unexpectedly.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BULLISH | PREDICTED GAIN: ${gainPct}%] Bullish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is generated based on a Wave 5 mathematical extension to maximize the risk/reward ratio while securing optimal algorithmic probability.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} strictly below the exhaustion support line (Wave 4 base) to instantly invalidate the setup and protect capital if the market flips bearish unexpectedly.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${getBullishDivergence()}`
             };
         }
       }
@@ -383,6 +392,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
 
       const recencyBoost = Math.pow((p4.index || i) / data.length, 3) * 10; // Lower recency impact
       score += recencyBoost;
+      score += bearishConfirmations.length * 15;
+      
+      if (tradeStyle === "SCALP TRADE" && bearishConfirmations.length < 2) continue;
 
       if (score > highestScore) {
         highestScore = score;
@@ -391,7 +403,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 - 0.618 * (start - w3);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = w1 * 1.01; // SL just above Wave 1 trough (structural invalidation)
+        let validStopLoss = w4 * 1.015; // SL above Wave 4
         
         let suggestedEntry = w4;
         let isInvalidated = false;
@@ -403,9 +415,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             const moveDone = (w4 - currentPrice) / (w4 - finalTarget);
             if (moveDone > 0.3) {
                 isInvalidated = true; // Too late, missed the run
+                console.log(`[EW Bearish] Invalidated: Too late. moveDone=${moveDone}`);
             }
         } else if (currentPrice <= finalTarget || currentPrice >= validStopLoss) {
             isInvalidated = true; // Trade is over or failed
+            console.log(`[EW Bearish] Invalidated: Price beyond target/SL. currentPrice=${currentPrice}, finalTarget=${finalTarget}, SL=${validStopLoss}`);
         }
         
         let finalTargetCopy = finalTarget;
@@ -413,8 +427,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = validStopLoss - suggestedEntry;
         const reward = suggestedEntry - finalTargetCopy;
-        if (risk <= 0 || reward / risk < 1.5) {
-            isInvalidated = true; // RR < 1.5 is skipped
+        if (risk <= 0 || reward / risk < 0.8) {
+            isInvalidated = true; // RR < 0.8 is skipped
+            console.log(`[EW Bearish] Invalidated: RR < 0.8. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Check if clamped SL invalidates the trade
@@ -452,20 +467,25 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
               tradeStyle,
       termStyle,
       gainPct,
-              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is based on the Wave 5 downward extension to maximize profit before typical support reversal.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} just above the Wave 4 resistance. If price breaks this ceiling, the bearish structure is instantly invalidated and the trade is closed to protect capital.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${rsiDivergence}`
+              reasoning: `[${tradeStyle} | BEARISH | PREDICTED GAIN: ${gainPct}%] Bearish Elliott Wave setup detected. Wave 2 retraced ${(retrace2*100).toFixed(1)}% of Wave 1, Wave 3 extended ${(ext3*100).toFixed(1)}% of Wave 1, and Wave 4 retraced ${(retrace4*100).toFixed(1)}% of Wave 3.\n\nTARGET JUSTIFICATION: The target (${finalTargetCopy.toFixed(4)}) is based on the Wave 5 downward extension to maximize profit before typical support reversal.\n\nSTOP LOSS: Set at ${validStopLoss.toFixed(4)} just above the Wave 4 resistance. If price breaks this ceiling, the bearish structure is instantly invalidated and the trade is closed to protect capital.\n\nAUTO SECURE: Algorithm continually monitors taking profit if it stalls near target.${getBearishDivergence()}`
             };
         }
       }
     }
   }
 
-  if (!bestSetup || highestScore < 100) {
+  
+  if (bestSetup) {
+      console.log(`[EW] Found setup, score=${highestScore}, termStyle=${bestSetup.termStyle}`);
+  }
+
+  if (!bestSetup || highestScore < 60) {
     return null; // Return null instead of taking a weak highly risky fallback
   }
 
   // Enforce STRICT confirmation boundary for short term scalps based on user request
   // Requires at least 130 score = Multiple mathematical confirmations of retracements and extensions
-  if (bestSetup.termStyle === 'SCALP' && highestScore < 130) {
+  if (bestSetup.termStyle === 'SCALP' && highestScore < 75) {
       return null; 
   }
 

@@ -1254,7 +1254,7 @@ async function startServer() {
            
            let bestAlgoResult = null;
            for (const scanInterval of intervalsToScan) {
-               const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=${scanInterval}&limit=200`);
+               const klinesRes = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${pair.symbol}&interval=${scanInterval}&limit=500`);
                const chartData = klinesRes.data.map((d: any) => ({
                  time: d[0],
                  open: parseFloat(d[1]),
@@ -1308,6 +1308,7 @@ async function startServer() {
 
               let recommendedAmount = tradeAmountDollars;
 
+              console.log(`[AutoScanner] ${pair.symbol} | entryDiff: ${entryDiff} | profit: ${projectedProfit} | target: ${algoResult.target} | SL: ${algoResult.stopLoss} | entry: ${algoResult.entry}`);
                if (entryDiff < 0.15 && projectedProfit >= (tradeAmountDollars * 0.05)) { // At least 5% ROE
                  algoResult.timeframe = algoResult.scanInterval || '1h';
                  foundAlerts.push({
