@@ -1434,12 +1434,16 @@ async function startServer() {
          for (const signal of pendingSignals) {
              try {
                 // Fetch recent price using klines to catch wicks
-                const response = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${signal.symbol}&interval=1m&limit=2`);
+                const response = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${signal.symbol}&interval=1m&limit=10`);
                 if (!response.data || response.data.length < 2) continue;
                 
-                const currPrice = parseFloat(response.data[1][4]);
-                const highPrice = Math.max(parseFloat(response.data[0][2]), parseFloat(response.data[1][2]));
-                const lowPrice = Math.min(parseFloat(response.data[0][3]), parseFloat(response.data[1][3]));
+                let lowPrice = Infinity;
+                let highPrice = -Infinity;
+                for (const d of response.data) {
+                    lowPrice = Math.min(lowPrice, parseFloat(d[3]));
+                    highPrice = Math.max(highPrice, parseFloat(d[2]));
+                }
+                const currPrice = parseFloat(response.data[response.data.length-1][4]);
                 const price = currPrice;
                 
                 let outcome = 'pending';
@@ -1534,16 +1538,20 @@ async function startServer() {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
                          let updated = false;
-                         if (progress >= 0.85 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.6) {
-                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.6;
-                             closeReason += ' Trailed SL to +60% profit. ';
+                         if (progress >= 0.80 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.7) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.7;
+                             closeReason += ' Trailed SL to +70% profit. ';
                              updated = true;
-                         } else if (progress >= 0.70 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.3) {
-                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.3;
-                             closeReason += ' Trailed SL to +30% profit. ';
+                         } else if (progress >= 0.60 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.4) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.4;
+                             closeReason += ' Trailed SL to +40% profit. ';
                              updated = true;
-                         } else if (progress >= 0.50 && signal.stopLoss < signal.entry * 1.001) {
-                             signal.stopLoss = signal.entry * 1.001;
+                         } else if (progress >= 0.40 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.15) {
+                             signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.15;
+                             closeReason += ' Trailed SL to +15% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.20 && signal.stopLoss < signal.entry * 1.0005) {
+                             signal.stopLoss = signal.entry * 1.0005;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
                          }
@@ -1573,16 +1581,20 @@ async function startServer() {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
                          let updated = false;
-                         if (progress >= 0.85 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.6) {
-                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.6;
-                             closeReason += ' Trailed SL to +60% profit. ';
+                         if (progress >= 0.80 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.7) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.7;
+                             closeReason += ' Trailed SL to +70% profit. ';
                              updated = true;
-                         } else if (progress >= 0.70 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.3) {
-                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.3;
-                             closeReason += ' Trailed SL to +30% profit. ';
+                         } else if (progress >= 0.60 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.4) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.4;
+                             closeReason += ' Trailed SL to +40% profit. ';
                              updated = true;
-                         } else if (progress >= 0.50 && signal.stopLoss > signal.entry * 0.999) {
-                             signal.stopLoss = signal.entry * 0.999;
+                         } else if (progress >= 0.40 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.15) {
+                             signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.15;
+                             closeReason += ' Trailed SL to +15% profit. ';
+                             updated = true;
+                         } else if (progress >= 0.20 && signal.stopLoss > signal.entry * 0.9995) {
+                             signal.stopLoss = signal.entry * 0.9995;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
                          }
@@ -1656,11 +1668,16 @@ async function startServer() {
                      else if (ut.side === 'SELL' && target > entry) { ut.side = 'BUY'; await ut.save(); }
                  }
                  
-                 const response = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${ut.symbol}&interval=1m&limit=2`);
+                 const response = await axios.get(`https://fapi.binance.com/fapi/v1/klines?symbol=${ut.symbol}&interval=1m&limit=10`);
                  if (!response.data || response.data.length < 2) continue;
-                 const currPrice = parseFloat(response.data[1][4]);
-                 const highPrice = Math.max(parseFloat(response.data[0][2]), parseFloat(response.data[1][2]));
-                 const lowPrice = Math.min(parseFloat(response.data[0][3]), parseFloat(response.data[1][3]));
+                 
+                 let lowPrice = Infinity;
+                 let highPrice = -Infinity;
+                 for (const d of response.data) {
+                     lowPrice = Math.min(lowPrice, parseFloat(d[3]));
+                     highPrice = Math.max(highPrice, parseFloat(d[2]));
+                 }
+                 const currPrice = parseFloat(response.data[response.data.length-1][4]);
                  const price = currPrice;
                  
                  let outcome = 'live';
