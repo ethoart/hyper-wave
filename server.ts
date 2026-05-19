@@ -1538,19 +1538,19 @@ async function startServer() {
                          let currentPnl = (price - signal.entry) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (price - signal.entry) / (signal.target - signal.entry);
                          let updated = false;
-                         if (progress >= 0.80 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.7) {
+                         if (progress >= 0.85 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.75) {
                              signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.7;
                              closeReason += ' Trailed SL to +70% profit. ';
                              updated = true;
-                         } else if (progress >= 0.60 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.4) {
+                         } else if (progress >= 0.75 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.4) {
                              signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.4;
                              closeReason += ' Trailed SL to +40% profit. ';
                              updated = true;
-                         } else if (progress >= 0.40 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.15) {
+                         } else if (progress >= 0.55 && signal.stopLoss < signal.entry + (signal.target - signal.entry) * 0.15) {
                              signal.stopLoss = signal.entry + (signal.target - signal.entry) * 0.15;
                              closeReason += ' Trailed SL to +15% profit. ';
                              updated = true;
-                         } else if (progress >= 0.20 && signal.stopLoss < signal.entry * 1.0005) {
+                         } else if (progress >= 0.40 && signal.stopLoss < signal.entry * 1.0005) {
                              signal.stopLoss = signal.entry * 1.0005;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
@@ -1581,19 +1581,19 @@ async function startServer() {
                          let currentPnl = (signal.entry - price) / signal.entry * (signal.amount || 10) * curLeverage;
                          let progress = (signal.entry - price) / (signal.entry - signal.target);
                          let updated = false;
-                         if (progress >= 0.80 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.7) {
+                         if (progress >= 0.85 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.75) {
                              signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.7;
                              closeReason += ' Trailed SL to +70% profit. ';
                              updated = true;
-                         } else if (progress >= 0.60 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.4) {
+                         } else if (progress >= 0.75 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.4) {
                              signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.4;
                              closeReason += ' Trailed SL to +40% profit. ';
                              updated = true;
-                         } else if (progress >= 0.40 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.15) {
+                         } else if (progress >= 0.55 && signal.stopLoss > signal.entry - (signal.entry - signal.target) * 0.15) {
                              signal.stopLoss = signal.entry - (signal.entry - signal.target) * 0.15;
                              closeReason += ' Trailed SL to +15% profit. ';
                              updated = true;
-                         } else if (progress >= 0.20 && signal.stopLoss > signal.entry * 0.9995) {
+                         } else if (progress >= 0.40 && signal.stopLoss > signal.entry * 0.9995) {
                              signal.stopLoss = signal.entry * 0.9995;
                              closeReason += ' Trailed SL to Break Even. ';
                              updated = true;
@@ -1909,6 +1909,19 @@ async function startServer() {
   setInterval(runDailyAIOptimizer, 60 * 60 * 1000);
 
   // Manual Trigger Endpoint for Settings
+  app.get('/api/engine/report', async (req: any, res) => {
+     if (!isDbConnected) return res.json({ params: null, insights: "Database not connected", updatedAt: null });
+     try {
+        let config = await EngineConfig.findOne({ id: 'global' });
+        if (!config) config = await EngineConfig.create({ id: 'global', autoBotBalance: 100 });
+        res.json({
+           params: config.params,
+           insights: config.insights || 'No recent insights available.',
+           updatedAt: config.updatedAt
+        });
+     } catch(e: any) { res.status(500).json({ error: e.message }); }
+  });
+
   app.get('/api/admin/config', authMiddleware, async (req: any, res) => {
      if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
        return res.status(403).json({ error: 'Only Admins can view config.' });

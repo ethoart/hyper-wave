@@ -1,3 +1,5 @@
+import { calculateEMA, calculateSMA, calculateMACD, calculateATR, calculateBollingerBands } from './technicalIndicators.js';
+
 export interface Kline {
   time: number;
   open: number;
@@ -281,7 +283,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 + 0.618 * (w3 - start);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = Math.max(w1, w4 * 0.99); // Tighten SL to 1% below w4 or w1 max
+        let validStopLoss = Math.max(w1, w4 * 0.98); // SL to w1 or slightly below w4 to avoid being wicks out
         let suggestedEntry = currentPrice;
         let isInvalidated = false;
         
@@ -398,7 +400,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         const target2 = w4 - 0.618 * (start - w3);
         const finalTarget = parseFloat(((target1 + target2) / 2).toFixed(4));
         
-        let validStopLoss = Math.min(w1, w4 * 1.01); // Tighten SL to 1% above w4 or w1 min
+        let validStopLoss = Math.min(w1, w4 * 1.02); // SL to w1 or slightly above w4
         let suggestedEntry = currentPrice;
         let isInvalidated = false;
         
@@ -470,8 +472,162 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   }
 
   if (!bestSetup || highestScore < 95) {
-    return null; // Strictest filtering, must have massive confirmation!
+    return analyzeAdvancedTA(data, interval, tradeStyle, termStyle, bullishConfirmations, bearishConfirmations);
   }
 
   return bestSetup;
+}
+
+function analyzeAdvancedTA(
+    data: Kline[], 
+    interval: string, 
+    tradeStyle: string, 
+    termStyle: string, 
+    bullishConfirmations: string[], 
+    bearishConfirmations: string[]
+) {
+    if (data.length < 50) return null;
+    
+    const closes = data.map(d => d.close);
+    const highs = data.map(d => d.high);
+    const lows = data.map(d => d.low);
+    const currentPrice = closes[closes.length - 1];
+    
+    const macd = calculateMACD(closes);
+    const bb = calculateBollingerBands(closes);
+    const atrLine = calculateATR(highs, lows, closes);
+    const ema20 = calculateEMA(closes, 20);
+    const ema50 = calculateEMA(closes, 50);
+    const ema200 = calculateEMA(closes, 200);
+    
+    const curAtr = atrLine[atrLine.length - 1];
+    
+    const mHist = macd.histogram;
+    const mLine = macd.macdLine;
+    const sLine = macd.signalLine;
+    
+    const curHist = mHist[mHist.length - 1];
+    const prevHist = mHist[mHist.length - 2];
+    
+    const curEma20 = ema20[ema20.length - 1];
+    const curEma50 = ema50[ema50.length - 1];
+    const curEma200 = ema200[ema200.length - 1];
+    
+    const curUpperBB = bb.upper[bb.upper.length - 1];
+    const curLowerBB = bb.lower[bb.lower.length - 1];
+    
+    let score = Math.max(0, bullishConfirmations.length * 15 + bearishConfirmations.length * 15);
+    
+    let isBullish = false;
+    let isBearish = false;
+    
+    let reason = "";
+
+    // Bullish Trend Check
+    if (curEma20 > curEma50 && currentPrice > curEma200) {
+        if (curHist > 0 && prevHist <= 0) { // MACD crossing up
+            isBullish = true;
+            score += 80;
+            reason += "✅ MACD Bullish Cross over zero line.\n";
+        } else if (curHist > prevHist && curHist > 0) {
+            isBullish = true;
+            score += 50;
+            reason += "✅ MACD expanding positively.\n";
+        }
+        if (currentPrice > curEma20 && lows[lows.length-2] <= curEma20) {
+            isBullish = true;
+            score += 60;
+            reason += "✅ Bouncing strongly off EMA20 Support.\n";
+        }
+    }
+    
+    // Bearish Trend Check
+    if (curEma20 < curEma50 && currentPrice < curEma200) {
+        if (curHist < 0 && prevHist >= 0) { // MACD crossing down
+            isBearish = true;
+            score += 80;
+            reason += "✅ MACD Bearish Cross under zero line.\n";
+        } else if (curHist < prevHist && curHist < 0) {
+            isBearish = true;
+            score += 50;
+            reason += "✅ MACD expanding negatively.\n";
+        }
+        if (currentPrice < curEma20 && highs[highs.length-2] >= curEma20) {
+            isBearish = true;
+            score += 60;
+            reason += "✅ Rejecting strongly off EMA20 Resistance.\n";
+        }
+    }
+    
+    // Oversold / Overbought bounce
+    if (closes[closes.length-1] > curLowerBB && lows[lows.length-2] <= bb.lower[bb.lower.length-2]) {
+        isBullish = true;
+        score += 70;
+        reason += "✅ Mean Reversion: Strong bounce from Bottom Bollinger Band.\n";
+    }
+    if (closes[closes.length-1] < curUpperBB && highs[highs.length-2] >= bb.upper[bb.upper.length-2]) {
+        isBearish = true;
+        score += 70;
+        reason += "✅ Mean Reversion: Strong rejection from Top Bollinger Band.\n";
+    }
+
+    if (isBullish && isBearish) return null; 
+    
+    if (score < 110) return null; // Require strong combination of TA
+    
+    let target, stopLoss;
+    
+    if (isBullish) {
+        stopLoss = currentPrice - curAtr * 2.5; 
+        target = currentPrice + curAtr * 4;
+        if (curUpperBB > target) target = curUpperBB;
+        
+        let recLeverage = Math.floor(Math.max(10, Math.min(20, (score / 100) * 10)));
+        const gainPct = (Math.abs(target - currentPrice) / currentPrice * 100).toFixed(2);
+        
+        return {
+              leverage: recLeverage,
+              score,
+              trend: 'bullish',
+              params: { model: 'AdvancedTA', type: 'MACD+BB+ATR+EMA' },
+              waves: null,
+              channelPoints: [],
+              flagPoints: [],
+              entry: currentPrice,
+              stopLoss: parseFloat(stopLoss.toFixed(4)),
+              target: parseFloat(target.toFixed(4)),
+              tradeStyle,
+              termStyle,
+              gainPct,
+              reasoning: `[${tradeStyle} | BULLISH | MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) and standard deviation (Bollinger Bands).\n\nSTOP LOSS: Set dynamically using ${2.5}x ATR wrapper to absorb natural market wicks.`
+        };
+    }
+    
+    if (isBearish) {
+        stopLoss = currentPrice + curAtr * 2.5;
+        target = currentPrice - curAtr * 4;
+        if (curLowerBB < target) target = curLowerBB;
+        
+        let recLeverage = Math.floor(Math.max(10, Math.min(20, (score / 100) * 10)));
+        const gainPct = (Math.abs(currentPrice - target) / currentPrice * 100).toFixed(2);
+        
+        return {
+              leverage: recLeverage,
+              score,
+              trend: 'bearish',
+              params: { model: 'AdvancedTA', type: 'MACD+BB+ATR+EMA' },
+              waves: null,
+              channelPoints: [],
+              flagPoints: [],
+              entry: currentPrice,
+              stopLoss: parseFloat(stopLoss.toFixed(4)),
+              target: parseFloat(target.toFixed(4)),
+              tradeStyle,
+              termStyle,
+              gainPct,
+              reasoning: `[${tradeStyle} | BEARISH | MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) and standard deviation.\n\nSTOP LOSS: Set dynamically utilizing ${2.5}x ATR buffer to absorb market wicks while preventing massive loss.`
+        };
+    }
+
+    return null;
 }

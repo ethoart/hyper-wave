@@ -567,6 +567,15 @@ export function Dashboard() {
     }
   };
 
+  const [aiReport, setAiReport] = useState<any>(null);
+  
+  const fetchAiReport = async () => {
+    try {
+      const res = await axios.get('/api/engine/report');
+      setAiReport(res.data);
+    } catch (err) {}
+  };
+
   const fetchUsers = async () => {
     try {
       const res = await axios.get('/api/users');
@@ -592,7 +601,11 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchTrades();
-    const intervalId = setInterval(fetchTrades, 15000); // every 15s
+    fetchAiReport();
+    const intervalId = setInterval(() => {
+       fetchTrades();
+       fetchAiReport();
+    }, 15000); // every 15s
     return () => clearInterval(intervalId);
   }, []);
 
@@ -811,6 +824,39 @@ export function Dashboard() {
                  </button>
                </>
              )}
+
+          <Dialog>
+             <DialogTrigger>
+               <div className="flex items-center gap-1.5 px-2 xl:px-4 py-1.5 bg-[#d946ef] hover:bg-[#c026d3] text-white text-sm font-medium rounded transition-colors mr-2 cursor-pointer">
+                 <Brain className="w-4 h-4" />
+                 <span className="hidden xl:inline">AI Engine Report</span>
+               </div>
+             </DialogTrigger>
+             <DialogContent className="bg-[#131722] border-[#2a2e39] text-[#d1d4dc] max-w-lg rounded-[8px]">
+               <DialogHeader>
+                 <DialogTitle className="flex items-center gap-2 text-white"><Brain className="w-5 h-5 text-[#d946ef]" /> Gemini 3.1 Pro Daily System Update</DialogTitle>
+               </DialogHeader>
+               <div className="flex flex-col gap-4 mt-4 text-sm">
+                 <div className="bg-[#1e222d] p-4 rounded border border-[#2a2e39]">
+                   <h3 className="text-[#089981] mb-2 font-bold uppercase text-[10px]">What problem was solved & fixed? (Insights)</h3>
+                   <p className="text-gray-300 leading-relaxed font-mono text-xs">{aiReport?.insights || 'Loading...'}</p>
+                 </div>
+                 
+                 <div className="bg-[#1e222d] p-4 rounded border border-[#2a2e39]">
+                   <h3 className="text-[#2962ff] mb-2 font-bold uppercase text-[10px]">Optimized Engine Core Rules</h3>
+                   <div className="flex flex-col gap-2 font-mono text-xs text-gray-300">
+                     <div className="flex justify-between"><span>Retrace Wave 2 Limit:</span> <span>{aiReport?.params?.retrace2?.toFixed(3) || '-'}</span></div>
+                     <div className="flex justify-between"><span>Extend Wave 3 Min:</span> <span>{aiReport?.params?.ext3?.toFixed(3) || '-'}</span></div>
+                     <div className="flex justify-between"><span>Retrace Wave 4 Limit:</span> <span>{aiReport?.params?.retrace4?.toFixed(3) || '-'}</span></div>
+                   </div>
+                 </div>
+
+                 <div className="text-right text-[#787b86] text-[10px]">
+                   Last updated: {aiReport?.updatedAt ? new Date(aiReport.updatedAt).toLocaleString() : '-'}
+                 </div>
+               </div>
+             </DialogContent>
+          </Dialog>
 
           <div className="h-5 w-[1px] bg-[#2a2e39] mx-1 md:mx-2 hidden sm:block"></div>
           
