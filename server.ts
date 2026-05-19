@@ -100,6 +100,7 @@ const userTradeSchema = new mongoose.Schema({
   symbol: String,
   side: { type: String, enum: ['BUY', 'SELL'] },
   amount: Number,
+  leverage: { type: Number, default: 10 },
   entry: Number,
   target: Number,
   stopLoss: Number,
@@ -642,7 +643,7 @@ async function startServer() {
              trend: ut.side === 'BUY' ? 'bullish' : 'bearish', 
              entry: ut.entry || ut.entryPrice,
              target: ut.target || ut.takeProfit,
-             pnlPercent: ut.realizedPnl ? (ut.realizedPnl / (ut.amount * 10)) * 100 : 0
+             pnlPercent: ut.realizedPnl ? (ut.realizedPnl / (ut.amount * (ut.leverage || 10))) * 100 : 0
          }))
       ].sort((a: any, b: any) => (new Date(b.resolvedAt || b.timestamp).getTime() - new Date(a.resolvedAt || a.timestamp).getTime())).slice(0, 50);
       
@@ -664,9 +665,9 @@ async function startServer() {
                 let pnlNum = 0;
                 if (entry) {
                     if (pt.side === 'BUY') {
-                        pnlNum = (currentPrice - entry) / entry * pt.amount * 10; // assuming 10x
+                        pnlNum = (currentPrice - entry) / entry * pt.amount * (pt.leverage || 10);
                     } else {
-                        pnlNum = (entry - currentPrice) / entry * pt.amount * 10;
+                        pnlNum = (entry - currentPrice) / entry * pt.amount * (pt.leverage || 10);
                     }
                 }
                 livePositions.push({
@@ -675,7 +676,7 @@ async function startServer() {
                    side: pt.side,
                    entryPrice: entry,
                    unRealizedProfit: pnlNum,
-                   leverage: 10,
+                   leverage: pt.leverage || 10,
                    markPrice: currentPrice,
                    binanceOrderId: pt.binanceOrderId,
                    target: pt.target || pt.takeProfit,
@@ -699,8 +700,8 @@ async function startServer() {
                   } else {
                       pnlPct = (t.entry - currentPrice) / t.entry * 100;
                   }
-                  t.unrealizedPnlPct = pnlPct * 10; // 10x leverage
-                  t.unrealizedPnl = (t.amount || 10) * 10 * (pnlPct / 100);
+                  t.unrealizedPnlPct = pnlPct * (t.setupData?.leverage || 10);
+                  t.unrealizedPnl = (t.amount || 10) * (t.setupData?.leverage || 10) * (pnlPct / 100);
               } catch(err) {}
           }
           return t;
@@ -817,6 +818,7 @@ async function startServer() {
           symbol,
           side,
           amount: parseFloat(amount),
+          leverage: parseFloat(leverage || '1'),
           entry: executedPrice,
           target: takeProfit ? parseFloat(takeProfit) : undefined,
           stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
@@ -889,9 +891,9 @@ async function startServer() {
                const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
                const currentPrice = parseFloat(tickRes.data.price);
                if (userPaperTrade.side === 'BUY') {
-                   realizedPnl = (currentPrice - userPaperTrade.entryPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * 10;
+                   realizedPnl = (currentPrice - userPaperTrade.entryPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * (userPaperTrade.leverage || 10);
                } else {
-                   realizedPnl = (userPaperTrade.entryPrice - currentPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * 10;
+                   realizedPnl = (userPaperTrade.entryPrice - currentPrice) / userPaperTrade.entryPrice * userPaperTrade.amount * (userPaperTrade.leverage || 10);
                }
            } catch(e) {}
            
@@ -941,7 +943,7 @@ async function startServer() {
                const tickRes = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.symbol}`);
                const currentPrice = parseFloat(tickRes.data.price);
                const diff = trade.trend === 'bullish' ? (currentPrice - trade.entry) / trade.entry : (trade.entry - currentPrice) / trade.entry;
-               realizedPnl = diff * trade.amount * 10;
+               realizedPnl = diff * trade.amount * (trade.leverage || 10);
            } catch(e) {}
        }
        trade.realizedPnl = realizedPnl;
@@ -1223,6 +1225,7 @@ async function startServer() {
                             symbol: pair.symbol,
                             side: side,
                             amount: result.amount || 10,
+                            leverage: leverage,
                             entry: currentPrice,
                             target: result.target,
                             stopLoss: result.stopLoss,
@@ -1501,6 +1504,7 @@ async function startServer() {
                                               userId: pUser._id,
                                               symbol: signal.symbol,
                                               side: side,
+                                              leverage: leverage,
                                               amount: tradeAmountDollars,
                                               entry: price,
                                               target: signal.target,
@@ -1665,7 +1669,7 @@ async function startServer() {
                  let userProgress = 0;
                  let closeReason = '';
                  if (ut.side === 'BUY') {
-                     let currentPnl = (price - entry) / entry * ut.amount * 10;
+                     let currentPnl = (price - entry) / entry * ut.amount * (ut.leverage || 10);
                      if (target) userProgress = (price - entry) / (target - entry);
                      
                      let updated = false;
@@ -1690,10 +1694,10 @@ async function startServer() {
                          closeReason += 'Maximum loss threshold hit (-200%).';
                      } else if (target && highPrice >= target) {
                          outcome = 'win';
-                         realizedPnl = (target - entry) / entry * ut.amount * 10;
+                         realizedPnl = (target - entry) / entry * ut.amount * (ut.leverage || 10);
                          closeReason += 'Target price reached.';
                      } else if (ut.stopLoss && lowPrice <= ut.stopLoss) {
-                         let calcPnl = (ut.stopLoss - entry) / entry * ut.amount * 10;
+                         let calcPnl = (ut.stopLoss - entry) / entry * ut.amount * (ut.leverage || 10);
                          if (Math.abs(calcPnl) <= 0.6) {
                              outcome = 'closed';
                              realizedPnl = calcPnl;
@@ -1705,7 +1709,7 @@ async function startServer() {
                          }
                      }
                  } else if (ut.side === 'SELL') {
-                     let currentPnl = (entry - price) / entry * ut.amount * 10;
+                     let currentPnl = (entry - price) / entry * ut.amount * (ut.leverage || 10);
                      if (target) userProgress = (entry - price) / (entry - target);
                      
                      let updated = false;
@@ -1729,10 +1733,10 @@ async function startServer() {
                          closeReason += 'Maximum loss threshold hit (-200%).';
                      } else if (target && lowPrice <= target) {
                          outcome = 'win';
-                         realizedPnl = (entry - target) / entry * ut.amount * 10;
+                         realizedPnl = (entry - target) / entry * ut.amount * (ut.leverage || 10);
                          closeReason += 'Target price reached.';
                      } else if (ut.stopLoss && highPrice >= ut.stopLoss) {
-                         let calcPnl = (entry - ut.stopLoss) / entry * ut.amount * 10;
+                         let calcPnl = (entry - ut.stopLoss) / entry * ut.amount * (ut.leverage || 10);
                          if (Math.abs(calcPnl) <= 0.6) {
                              outcome = 'closed';
                              realizedPnl = calcPnl;
@@ -1826,21 +1830,25 @@ async function startServer() {
               symbol: t.symbol,
               trend: t.trend,
               outcome: t.status,
+              termStyle: t.termStyle,
               pnl: t.pnlPercent,
-              paramsUsed: t.setupData?.params?.params || null
+              leverage: t.setupData?.leverage || 10,
+              gainPct: t.setupData?.gainPct || "0",
+              paramsUsed: t.setupData?.params || null
           }));
 
           const prompt = `
-            You are an elite Quant Developer optimizing an Elliott Wave trading engine. 
-            Our goal is to reach a profitable 80% win rate.
+            You are a seasoned Professional Algorithmic Trader managing a multi-million-dollar fund with deep expertise in technical analysis, momentum, options leverage, and Elliott Wave mechanics. 
+            Our goal is to reach a profitable 80% win rate while optimizing risk-to-reward metrics.
             Here is the outcome data of our most recent ${tradeData.length} trades:
             
             ${JSON.stringify(tradeData)}
             
-            Based on analyzing the correlation between the parameters used for the wins versus the losses, adjust the engine's core Elliott Wave structural mathematical parameters to proactively avoid similar losses in the future.
-            - retrace2 (Wave 2 retracement, standard 0.618)
-            - ext3 (Wave 3 extension, standard 1.618)
-            - retrace4 (Wave 4 retracement, standard 0.382)
+            Think like an experienced trader: review the performance of different leverages, trends, and setup parameters. Where did we bleed capital? What works best right now?
+            Based on analyzing the market behavior, correlation of losses versus wins, adjust our engine's core structural requirements. Evolve the strategy to cut bad setups and focus on high-probability entries.
+            - retrace2 (Wave 2 retracement limit, e.g., 0.382 - 0.786)
+            - ext3 (Wave 3 extension minimum, e.g., 1.0 - 2.618)
+            - retrace4 (Wave 4 retracement limit, e.g., 0.236 - 0.5)
             
             Find the "sweet spot" parameters from the winning trades and avoid the parameters that led to losses.
             
@@ -1849,7 +1857,7 @@ async function startServer() {
               "retrace2": <optimized number>,
               "ext3": <optimized number>,
               "retrace4": <optimized number>,
-              "insights": "Detailed explanation of exactly why you chose these parameters to avoid past failures and achieve an 80% win rate."
+              "insights": "Detailed 2-3 sentence strategic takeaway from the perspective of an expert trader. Mention risk/leverage control."
             }
           `;
 

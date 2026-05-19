@@ -200,7 +200,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     const gainPct = (Math.abs(target - entry) / entry * 100).toFixed(2);
 
     return {
-      leverage: 10,
+      leverage: Math.floor(Math.random() * 5 + 5),
       score: 0,
       trend: isBull ? 'bullish' : 'bearish',
       waves: {
@@ -319,7 +319,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            const recLeverage = Math.floor(Math.max(3, Math.min(10, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SCALP_TRADE' || termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -441,7 +441,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            const recLeverage = Math.floor(Math.max(3, Math.min(10, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SCALP_TRADE' || termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
