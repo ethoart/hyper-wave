@@ -618,11 +618,14 @@ export function Dashboard() {
     }
   };
 
+  const [customAIPrompt, setCustomAIPrompt] = useState<string>('');
+
   const handleRunOptimizer = async () => {
     try {
       addNotification("Starting background AI Optimizer using Gemini Auto-Fix Engine...");
-      const res = await axios.post('/api/ml/optimize');
+      const res = await axios.post('/api/ml/optimize', { customPrompt: customAIPrompt });
       addNotification(res.data.message || "Optimization complete.");
+      setCustomAIPrompt('');
     } catch (err: any) {
       alert("Failed to run optimizer: " + (err.response?.data?.error || err.message));
     }
@@ -1787,6 +1790,12 @@ plot(close)"
                          <p className="text-xs text-[#787b86] mb-4">
                            Forces the local ML evaluator to trigger the Gemini AI engine. It will analyze all recent win/loss mathematical predictions, recalibrate the wave structural parameters, and attempt to dynamically boost the system's win rate to 80%.
                          </p>
+                         <textarea 
+                            className="w-full bg-[#1e222d] text-white text-xs p-2 rounded border border-[#2a2e39] mb-4 focus:outline-none focus:border-[#2962ff] resize-none h-16"
+                            placeholder="Optional: Enter a custom instruction for Gemini (e.g. 'Focus on strict risk management, ignore the last 2 trades' or 'Increase the limit for wave 4 extensions')..."
+                            value={customAIPrompt}
+                            onChange={(e) => setCustomAIPrompt(e.target.value)}
+                         />
                          <button onClick={handleRunOptimizer} className="w-full bg-[#2962ff]/20 hover:bg-[#2962ff]/40 text-[#2962ff] border border-[#2962ff] text-sm font-bold py-2 rounded transition-colors flex items-center justify-center gap-2">
                             <PlayCircle className="w-4 h-4" />
                             Run Gemini Auto-Fix Optimizer

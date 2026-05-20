@@ -1826,10 +1826,10 @@ async function startServer() {
 
   // Daily AI Optimizer using Gemini 3.1 Pro
   let lastOptimizationTime = 0;
-  const runDailyAIOptimizer = async () => {
+  const runDailyAIOptimizer = async (customPrompt?: string) => {
       const now = Date.now();
       // Only run once every 24 hours (unless manually triggered)
-      if (now - lastOptimizationTime < 24 * 60 * 60 * 1000 && lastOptimizationTime !== 0) return;
+      if (now - lastOptimizationTime < 24 * 60 * 60 * 1000 && lastOptimizationTime !== 0 && !customPrompt) return;
       if (!isDbConnected || !process.env.GEMINI_API_KEY) return;
       
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -1856,7 +1856,7 @@ async function startServer() {
               tradeDataMsg = `Here is the outcome data of our most recent trades:\n${JSON.stringify(tradeData)}`;
           }
 
-          const prompt = `
+          let prompt = `
             You are a seasoned Professional Algorithmic Trader managing a multi-million-dollar fund with deep expertise in technical analysis, momentum, options leverage, and Elliott Wave mechanics. 
             Our goal is to reach a profitable 80% win rate while optimizing risk-to-reward metrics.
             ${tradeDataMsg}
@@ -1877,6 +1877,10 @@ async function startServer() {
               "insights": "Detailed 2-3 sentence strategic takeaway from the perspective of an expert trader. Mention risk/leverage control."
             }
           `;
+
+          if (customPrompt && customPrompt.trim() !== '') {
+              prompt += `\n\nCRITICAL USER OVERRIDE / CUSTOM INSTRUCTION:\n${customPrompt}`;
+          }
 
           const aiResponse = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
@@ -1961,7 +1965,7 @@ async function startServer() {
       }
       // Force it to run
       lastOptimizationTime = 0; 
-      runDailyAIOptimizer(); // run async
+      runDailyAIOptimizer(req.body.customPrompt); // run async
       res.json({ success: true, message: "Daily AI Optimizer triggered via Gemini AI and is running in the background." });
   });
 
