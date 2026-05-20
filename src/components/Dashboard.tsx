@@ -620,7 +620,7 @@ export function Dashboard() {
 
   const handleRunOptimizer = async () => {
     try {
-      addNotification("Starting background AI Optimizer using Gemini 3.1 Pro...");
+      addNotification("Starting background AI Optimizer using Gemini Auto-Fix Engine...");
       const res = await axios.post('/api/ml/optimize');
       addNotification(res.data.message || "Optimization complete.");
     } catch (err: any) {
@@ -834,7 +834,7 @@ export function Dashboard() {
              </DialogTrigger>
              <DialogContent className="bg-[#131722] border-[#2a2e39] text-[#d1d4dc] max-w-lg rounded-[8px]">
                <DialogHeader>
-                 <DialogTitle className="flex items-center gap-2 text-white"><Brain className="w-5 h-5 text-[#d946ef]" /> Gemini 3.1 Pro Daily System Update</DialogTitle>
+                 <DialogTitle className="flex items-center gap-2 text-white"><Brain className="w-5 h-5 text-[#d946ef]" /> Gemini AI Daily System Update</DialogTitle>
                </DialogHeader>
                <div className="flex flex-col gap-4 mt-4 text-sm">
                  <div className="bg-[#1e222d] p-4 rounded border border-[#2a2e39]">
@@ -1785,7 +1785,7 @@ plot(close)"
                             AI Engine Optimizer
                          </h3>
                          <p className="text-xs text-[#787b86] mb-4">
-                           Forces the local ML evaluator to trigger the Gemini 3.1 Pro engine. It will analyze all recent win/loss mathematical predictions, recalibrate the wave structural parameters, and attempt to dynamically boost the system's win rate to 80%.
+                           Forces the local ML evaluator to trigger the Gemini AI engine. It will analyze all recent win/loss mathematical predictions, recalibrate the wave structural parameters, and attempt to dynamically boost the system's win rate to 80%.
                          </p>
                          <button onClick={handleRunOptimizer} className="w-full bg-[#2962ff]/20 hover:bg-[#2962ff]/40 text-[#2962ff] border border-[#2962ff] text-sm font-bold py-2 rounded transition-colors flex items-center justify-center gap-2">
                             <PlayCircle className="w-4 h-4" />
