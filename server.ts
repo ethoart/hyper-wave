@@ -551,6 +551,12 @@ async function startServer() {
     try {
       if (!isDbConnected) return res.json({ success: false });
       const { symbol, trend, entry, target, stopLoss, amount, setupData } = req.body;
+      
+      const activeGlobalTrends = await TradeSignal.distinct('trend', { status: { $in: ['pending', 'live'] } });
+      if (activeGlobalTrends.length > 0 && !activeGlobalTrends.includes(trend)) {
+          return res.json({ success: false, message: `Trade rejected: Portfolio is currently committed to ${activeGlobalTrends[0]} direction. Cannot mix long and short trades.` });
+      }
+      
       const existing = await TradeSignal.findOne({ symbol, status: 'pending', trend });
       
       const tradeAmountDollars = amount || 10;
@@ -1352,9 +1358,16 @@ async function startServer() {
             
             // Check current active trades to avoid over-trading the same budget 
             const activeCount = await TradeSignal.countDocuments({ status: { $in: ['pending', 'live'] } });
+            const activeGlobalTrends = await TradeSignal.distinct('trend', { status: { $in: ['pending', 'live'] } });
             
             for (const alert of foundAlerts) {
                try {
+                   // Ensure no mixed directions (long and short at the same time)
+                   if (activeGlobalTrends.length > 0 && !activeGlobalTrends.includes(alert.trend)) {
+                       console.log(`[Engine] Blocked ${alert.trend} on ${alert.symbol} because portfolio is already committed to ${activeGlobalTrends[0]} direction.`);
+                       continue; // Skip this alert
+                   }
+
                    const existing = await TradeSignal.findOne({ 
                        symbol: alert.symbol,
                        $or: [
@@ -1909,10 +1922,6 @@ async function startServer() {
           console.error("[Daily AI Optimizer] Optimization failed:", err);
       }
   };
-
-  // Run automatically daily (checking every hour)
-  setInterval(runDailyAIOptimizer, 60 * 60 * 1000);
-  setTimeout(runDailyAIOptimizer, 30000); // Run 30s after boot
 
   // Manual Trigger Endpoint for Settings
   app.get('/api/engine/report', async (req: any, res) => {
