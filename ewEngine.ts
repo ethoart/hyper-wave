@@ -302,9 +302,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = suggestedEntry - validStopLoss;
         const reward = finalTargetCopy - suggestedEntry;
-        if (risk <= 0 || reward / risk < 0.8) {
-            isInvalidated = true; // RR < 0.8 is skipped
-            console.log(`[EW] Invalidated: RR < 0.8. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
+        if (risk <= 0 || reward / risk < 1.25) {
+            isInvalidated = true; // RR < 1.25 is skipped
+            console.log(`[EW] Invalidated: RR < 1.25. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Only accept if not invalidated securely
@@ -419,9 +419,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = validStopLoss - suggestedEntry;
         const reward = suggestedEntry - finalTargetCopy;
-        if (risk <= 0 || reward / risk < 0.8) {
-            isInvalidated = true; // RR < 0.8 is skipped
-            console.log(`[EW Bearish] Invalidated: RR < 0.8. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
+        if (risk <= 0 || reward / risk < 1.25) {
+            isInvalidated = true; // RR < 1.25 is skipped
+            console.log(`[EW Bearish] Invalidated: RR < 1.25. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Check if clamped SL invalidates the trade
@@ -523,66 +523,70 @@ function analyzeAdvancedTA(
     
     let reason = "";
 
-    // Bullish Trend Check
-    if (curEma20 > curEma50 && currentPrice > curEma200) {
-        if (curHist > 0 && prevHist <= 0) { // MACD crossing up
-            isBullish = true;
-            score += 80;
-            reason += "✅ MACD Bullish Cross over zero line.\n";
-        } else if (curHist > prevHist && curHist > 0) {
-            isBullish = true;
-            score += 50;
-            reason += "✅ MACD expanding positively.\n";
-        }
-        if (currentPrice > curEma20 && lows[lows.length-2] <= curEma20) {
-            isBullish = true;
-            score += 60;
-            reason += "✅ Bouncing strongly off EMA20 Support.\n";
-        }
-    }
-    
-    // Bearish Trend Check
-    if (curEma20 < curEma50 && currentPrice < curEma200) {
-        if (curHist < 0 && prevHist >= 0) { // MACD crossing down
-            isBearish = true;
-            score += 80;
-            reason += "✅ MACD Bearish Cross under zero line.\n";
-        } else if (curHist < prevHist && curHist < 0) {
-            isBearish = true;
-            score += 50;
-            reason += "✅ MACD expanding negatively.\n";
-        }
-        if (currentPrice < curEma20 && highs[highs.length-2] >= curEma20) {
-            isBearish = true;
-            score += 60;
-            reason += "✅ Rejecting strongly off EMA20 Resistance.\n";
+    // Bullish Trend Check (Only allow if generally above EMA200 for safety)
+    if (currentPrice > curEma200) {
+        if (curEma20 > curEma50) {
+            if (curHist > 0 && prevHist <= 0) { // MACD crossing up
+                isBullish = true;
+                score += 80;
+                reason += "✅ MACD Bullish Cross over zero line.\n";
+            } else if (curHist > prevHist && curHist > 0) {
+                isBullish = true;
+                score += 50;
+                reason += "✅ MACD expanding positively.\n";
+            }
+            if (currentPrice > curEma20 && lows[lows.length-2] <= curEma20) {
+                isBullish = true;
+                score += 60;
+                reason += "✅ Bouncing strongly off EMA20 Support.\n";
+            }
         }
     }
     
-    // Oversold / Overbought bounce
-    if (closes[closes.length-1] > curLowerBB && lows[lows.length-2] <= bb.lower[bb.lower.length-2]) {
+    // Bearish Trend Check (Only allow if generally below EMA200 for safety)
+    if (currentPrice < curEma200) {
+        if (curEma20 < curEma50) {
+            if (curHist < 0 && prevHist >= 0) { // MACD crossing down
+                isBearish = true;
+                score += 80;
+                reason += "✅ MACD Bearish Cross under zero line.\n";
+            } else if (curHist < prevHist && curHist < 0) {
+                isBearish = true;
+                score += 50;
+                reason += "✅ MACD expanding negatively.\n";
+            }
+            if (currentPrice < curEma20 && highs[highs.length-2] >= curEma20) {
+                isBearish = true;
+                score += 60;
+                reason += "✅ Rejecting strongly off EMA20 Resistance.\n";
+            }
+        }
+    }
+    
+    // Oversold / Overbought bounce (Must be aligned with major trend)
+    if (currentPrice > curEma200 && closes[closes.length-1] > curLowerBB && lows[lows.length-2] <= bb.lower[bb.lower.length-2]) {
         isBullish = true;
         score += 70;
-        reason += "✅ Mean Reversion: Strong bounce from Bottom Bollinger Band.\n";
+        reason += "✅ Mean Reversion: Strong bounce from Bottom Bollinger Band in Bull Market.\n";
     }
-    if (closes[closes.length-1] < curUpperBB && highs[highs.length-2] >= bb.upper[bb.upper.length-2]) {
+    if (currentPrice < curEma200 && closes[closes.length-1] < curUpperBB && highs[highs.length-2] >= bb.upper[bb.upper.length-2]) {
         isBearish = true;
         score += 70;
-        reason += "✅ Mean Reversion: Strong rejection from Top Bollinger Band.\n";
+        reason += "✅ Mean Reversion: Strong rejection from Top Bollinger Band in Bear Market.\n";
     }
 
     if (isBullish && isBearish) return null; 
     
-    if (score < 110) return null; // Require strong combination of TA
+    if (score < 130) return null; // Require strong combination of TA (Higher strictness)
     
     let target, stopLoss;
     
     if (isBullish) {
-        stopLoss = currentPrice - curAtr * 2.5; 
-        target = currentPrice + curAtr * 4;
+        stopLoss = currentPrice - curAtr * 2; 
+        target = currentPrice + curAtr * 5; // 1:2.5 Risk Reward Minimum
         if (curUpperBB > target) target = curUpperBB;
         
-        let recLeverage = Math.floor(Math.max(10, Math.min(20, (score / 100) * 10)));
+        let recLeverage = Math.floor(Math.max(5, Math.min(15, (score / 100) * 10)));
         const gainPct = (Math.abs(target - currentPrice) / currentPrice * 100).toFixed(2);
         
         return {
@@ -599,16 +603,16 @@ function analyzeAdvancedTA(
               tradeStyle,
               termStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BULLISH | MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) and standard deviation (Bollinger Bands).\n\nSTOP LOSS: Set dynamically using ${2.5}x ATR wrapper to absorb natural market wicks.`
+              reasoning: `[${tradeStyle} | BULLISH | STRICT MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) predicting a 1:2.5 positive RR minimum.\n\nSTOP LOSS: Set dynamically using ${2}x ATR wrapper to absorb wicks.`
         };
     }
     
     if (isBearish) {
-        stopLoss = currentPrice + curAtr * 2.5;
-        target = currentPrice - curAtr * 4;
+        stopLoss = currentPrice + curAtr * 2;
+        target = currentPrice - curAtr * 5; // 1:2.5 Risk Reward Minimum
         if (curLowerBB < target) target = curLowerBB;
         
-        let recLeverage = Math.floor(Math.max(10, Math.min(20, (score / 100) * 10)));
+        let recLeverage = Math.floor(Math.max(5, Math.min(15, (score / 100) * 10)));
         const gainPct = (Math.abs(currentPrice - target) / currentPrice * 100).toFixed(2);
         
         return {
@@ -625,7 +629,7 @@ function analyzeAdvancedTA(
               tradeStyle,
               termStyle,
               gainPct,
-              reasoning: `[${tradeStyle} | BEARISH | MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) and standard deviation.\n\nSTOP LOSS: Set dynamically utilizing ${2.5}x ATR buffer to absorb market wicks while preventing massive loss.`
+              reasoning: `[${tradeStyle} | BEARISH | STRICT MULTI-STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET JUSTIFICATION: Target (${parseFloat(target.toFixed(4))}) aligned dynamically using Volatility (ATR) predicting a 1:2.5 positive RR minimum.\n\nSTOP LOSS: Set dynamically utilizing ${2}x ATR buffer to absorb wicks.`
         };
     }
 
