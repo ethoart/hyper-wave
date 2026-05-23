@@ -569,12 +569,19 @@ async function startServer() {
       
       // Calculate current projected loss
       let rawLossUsdt = 0;
+      let rr = 0;
       if (trend === 'bullish') {
           rawLossUsdt = (positionSizeUsdt / entryPrice) * (entryPrice - slPrice);
+          rr = (targetPrice - entryPrice) / (entryPrice - slPrice);
       } else {
           rawLossUsdt = (positionSizeUsdt / entryPrice) * (slPrice - entryPrice);
+          rr = (entryPrice - targetPrice) / (slPrice - entryPrice);
       }
       
+      if (rr < 1.5) {
+          return res.json({ success: false, message: `Trade rejected: Risk/Reward ratio ${rr.toFixed(2)} is too poor. Must be >= 1.5.` });
+      }
+
       // Calculate projected profit based on position size
       const priceDiff = Math.abs(targetPrice - entryPrice);
       const projectedProfit = (positionSizeUsdt / entryPrice) * priceDiff;
@@ -634,7 +641,7 @@ async function startServer() {
       }
       const pendingTrades = await TradeSignal.find({ status: 'pending' }).sort({ timestamp: -1 }).limit(20);
       const closedSignals = await TradeSignal.find({ status: { $ne: 'pending' } }).sort({ resolvedAt: -1 }).limit(50);
-      const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed', isAuto: { $ne: true } }).sort({ resolvedAt: -1 }).limit(20);
+      const closedUserTrades = await UserTrade.find({ userId: req.user._id, status: 'closed' }).sort({ resolvedAt: -1 }).limit(50);
       
       const closed = [
          ...closedSignals.map(sig => ({ 
@@ -1404,6 +1411,17 @@ async function startServer() {
 
                        let finalAmount = tradeAmountDollars;
                        activePosSize = finalAmount * leverage;
+
+                       let rr = 0;
+                       if (alert.trend === 'bullish') {
+                           rr = (alert.target - alert.entry) / (alert.entry - activeSl);
+                       } else {
+                           rr = (alert.entry - alert.target) / (activeSl - alert.entry);
+                       }
+                       if (rr < 1.5) {
+                           console.log(`[Engine] Blocked ${alert.trend} on ${alert.symbol} due to poor global Risk/Reward: ${rr.toFixed(2)}. Target: ${alert.target}, Entry: ${alert.entry}, SL: ${activeSl}`);
+                           continue; // Skip this bad trade
+                       }
 
                        const expiresAt = new Date(Date.now() + (alert.termStyle === 'SHORT_TERM' ? 2 : 12) * 60 * 60 * 1000);
                        
