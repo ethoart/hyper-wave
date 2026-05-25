@@ -1687,9 +1687,9 @@ async function startServer() {
              } catch(e) { }
          }
          
-         // Evaluate active User Paper Trades
-         const liveUserPaperTrades = await UserTrade.find({ status: 'live', binanceOrderId: /^paper_/ });
-         for (const ut of liveUserPaperTrades) {
+         // Evaluate active User Trades (both Paper and Real Binance)
+         const liveUserTrades = await UserTrade.find({ status: 'live' });
+         for (const ut of liveUserTrades) {
              try {
                  // Auto-heal inverted sides
                  const entry = ut.entry || ut.entryPrice;
@@ -1798,12 +1798,23 @@ async function startServer() {
                  }
                  
                  if (outcome !== 'live') {
+                     if (ut.binanceOrderId && !ut.binanceOrderId.startsWith('paper_')) {
+                         const pUser = await User.findById(ut.userId);
+                         if (pUser && pUser.binanceApiKey && pUser.binanceSecretKey) {
+                             try {
+                                 await closeBinancePosition(ut.symbol, pUser.binanceApiKey, pUser.binanceSecretKey);
+                                 console.log(`[Binance-Real] Auto-closed ${ut.side} ${ut.symbol} for user ${ut.userId}`);
+                             } catch(e: any) {
+                                 console.error(`[Binance-Real close error] User ${ut.userId} Symbol ${ut.symbol}:`, e.message);
+                             }
+                         }
+                     }
                      ut.status = 'closed';
                      ut.realizedPnl = realizedPnl;
                      ut.resolvedAt = new Date();
                      ut.closeReason = closeReason;
                      await ut.save();
-                     console.log(`[User-Paper] Auto-closed ${ut.side} ${ut.symbol} for user ${ut.userId}: ${outcome.toUpperCase()} ($${realizedPnl.toFixed(2)})`);
+                     console.log(`[User-Trade] Auto-closed ${ut.side} ${ut.symbol} for user ${ut.userId}: ${outcome.toUpperCase()} ($${realizedPnl.toFixed(2)})`);
                  }
              } catch(e) {}
          }
