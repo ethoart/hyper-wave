@@ -16,6 +16,7 @@ import {
   getBinanceBalance,
   getBinancePositions,
   setBinanceLeverage,
+  updateBinanceStopLoss
 } from "./binanceService.js";
 
 dotenv.config();
@@ -2202,7 +2203,12 @@ async function startServer() {
                 closeReason += " Trailed SL to Break Even. ";
                 updated = true;
               }
-              if (updated) signal.save().catch(() => {});
+              if (updated) {
+                 signal.save().catch(() => {});
+                 if (signal.binanceOrderId && !signal.binanceOrderId.toString().startsWith('paper_')) {
+                     updateBinanceStopLoss(signal.symbol, 'BUY', signal.stopLoss);
+                 }
+              }
 
               if (currentPnl <= -(signal.amount || 10) * 1.2) {
                 outcome = "loss";
@@ -2267,7 +2273,12 @@ async function startServer() {
                 closeReason += " Trailed SL to Break Even. ";
                 updated = true;
               }
-              if (updated) signal.save().catch(() => {});
+              if (updated) {
+                 signal.save().catch(() => {});
+                 if (signal.binanceOrderId && !signal.binanceOrderId.toString().startsWith('paper_')) {
+                     updateBinanceStopLoss(signal.symbol, 'SELL', signal.stopLoss);
+                 }
+              }
 
               if (currentPnl <= -(signal.amount || 10) * 1.2) {
                 outcome = "loss";
@@ -2411,7 +2422,16 @@ async function startServer() {
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
             }
-            if (updated) ut.save().catch(() => {});
+            if (updated) {
+               ut.save().catch(() => {});
+               if (ut.binanceOrderId && !ut.binanceOrderId.toString().startsWith('paper_')) {
+                   User.findById(ut.userId).then((usr: any) => {
+                       if (usr && usr.binanceApiKey && usr.binanceSecretKey) {
+                           updateBinanceStopLoss(ut.symbol, 'BUY', ut.stopLoss, usr.binanceApiKey, usr.binanceSecretKey);
+                       }
+                   }).catch(()=>{});
+               }
+            }
 
             if (currentPnl <= -20) {
               outcome = "loss";
@@ -2465,7 +2485,16 @@ async function startServer() {
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
             }
-            if (updated) ut.save().catch(() => {});
+            if (updated) {
+               ut.save().catch(() => {});
+               if (ut.binanceOrderId && !ut.binanceOrderId.toString().startsWith('paper_')) {
+                   User.findById(ut.userId).then((usr: any) => {
+                       if (usr && usr.binanceApiKey && usr.binanceSecretKey) {
+                           updateBinanceStopLoss(ut.symbol, 'SELL', ut.stopLoss, usr.binanceApiKey, usr.binanceSecretKey);
+                       }
+                   }).catch(()=>{});
+               }
+            }
             if (currentPnl <= -20) {
               outcome = "loss";
               realizedPnl = -20;

@@ -101,9 +101,24 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
 
     await new Promise(r => setTimeout(r, 1000)); // wait for market order to fill
 
-    // Native Binance Stop Loss / Take profit placement is Disabled.
-    // The server cron natively tracks, mathematically trails the Stop Loss,
-    // and natively closes the position using trailing Logic to keep in perfect sync.
+    // Native Binance Stop Loss / Take profit placement
+    if (finalTP) {
+      try {
+        const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
+        let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+        const tpSig = createSignature(tpQuery, secretKey);
+        await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+      } catch(e) { console.warn("Failed to place native TP", e); }
+    }
+
+    if (finalSL) {
+      try {
+        const slSide = side === 'BUY' ? 'SELL' : 'BUY';
+        let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+        const slSig = createSignature(slQuery, secretKey);
+        await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+      } catch(e) { console.warn("Failed to place native SL", e); }
+    }
 
     return response.data;
   } catch (error: any) {
@@ -236,5 +251,52 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
   } catch (error: any) {
      console.error("Close position error:", error.response?.data || error.message);
      throw new Error(error.response?.data?.msg || 'Failed to close position');
+  }
+}
+
+export async function updateBinanceStopLoss(symbol: string, side: 'BUY' | 'SELL', stopLoss: number, customKey?: string, customSecret?: string) {
+  const isTestnet = process.env.BINANCE_TESTNET === 'true';
+  const apiKey = customKey || (isTestnet ? process.env.BINANCE_TESTNET_API_KEY : process.env.BINANCE_API_KEY) || process.env.BINANCE_API_KEY;
+  const secretKey = customSecret || (isTestnet ? process.env.BINANCE_TESTNET_SECRET_KEY : process.env.BINANCE_SECRET_KEY) || process.env.BINANCE_SECRET_KEY;
+  
+  if (!apiKey || !secretKey) return;
+
+  const baseUrl = getBaseUrl();
+  const exchangeInfo = await getExchangeInfo();
+  let finalSL = stopLoss;
+
+  if (exchangeInfo) {
+    const symbolInfo = exchangeInfo.symbols.find((s: any) => s.symbol === symbol);
+    if (symbolInfo) {
+      const priceFilter = symbolInfo.filters.find((f: any) => f.filterType === 'PRICE_FILTER');
+      if (priceFilter) {
+        finalSL = adjustPrecision(stopLoss, priceFilter.tickSize);
+      }
+    }
+  }
+
+  try {
+    // 1. Fetch open orders for symbol
+    const openOrdersQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+    const openOrdersSig = createSignature(openOrdersQuery, secretKey);
+    const openOrders = await axios.get(`${baseUrl}/fapi/v1/openOrders?${openOrdersQuery}&signature=${openOrdersSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+
+    // 2. Cancel existing STOP_MARKET orders
+    for (const order of openOrders.data) {
+       if (order.type === 'STOP_MARKET') {
+           const cancelQuery = `symbol=${symbol}&orderId=${order.orderId}&timestamp=${Date.now()}`;
+           const cancelSig = createSignature(cancelQuery, secretKey);
+           await axios.delete(`${baseUrl}/fapi/v1/order?${cancelQuery}&signature=${cancelSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+       }
+    }
+
+    // 3. Place new STOP_MARKET order
+    const slSide = side === 'BUY' ? 'SELL' : 'BUY';
+    const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+    const slSig = createSignature(slQuery, secretKey);
+    await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+    
+  } catch(e: any) {
+    console.warn(`[Binance] Failed to update trailing SL for ${symbol}`, e.response?.data || e.message);
   }
 }
