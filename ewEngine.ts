@@ -471,7 +471,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       console.log(`[EW] Found setup, score=${highestScore}, termStyle=${bestSetup.termStyle}`);
   }
 
-  if (!bestSetup || highestScore < 105) {
+  if (!bestSetup || highestScore < 125) {
     return analyzeAdvancedTA(data, interval, tradeStyle, termStyle, bullishConfirmations, bearishConfirmations);
   }
 
@@ -577,7 +577,7 @@ function analyzeAdvancedTA(
 
     if (isBullish && isBearish) return null; 
     
-    if (score < 130) return null; // Require strong combination of TA (Higher strictness)
+    if (score < 160) return null; // Require extreme combinations of TA
     
     let target, stopLoss;
     

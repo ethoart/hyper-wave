@@ -105,7 +105,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
     if (finalTP) {
       try {
         const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
-        let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+        let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${Date.now()}`;
         const tpSig = createSignature(tpQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
       } catch(e) { console.warn("Failed to place native TP", e); }
@@ -114,7 +114,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
     if (finalSL) {
       try {
         const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-        let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+        let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${Date.now()}`;
         const slSig = createSignature(slQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
       } catch(e) { console.warn("Failed to place native SL", e); }
@@ -292,7 +292,7 @@ export async function updateBinanceStopLoss(symbol: string, side: 'BUY' | 'SELL'
 
     // 3. Place new STOP_MARKET order
     const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-    const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timeInForce=GTC&timestamp=${Date.now()}`;
+    const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${Date.now()}`;
     const slSig = createSignature(slQuery, secretKey);
     await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
     

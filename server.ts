@@ -2187,7 +2187,7 @@ async function startServer() {
                 closeReason += " Trailed SL to +70% profit. ";
                 updated = true;
               } else if (
-                progress >= 0.75 &&
+                progress >= 0.65 &&
                 signal.stopLoss <
                   signal.entry + (signal.target - signal.entry) * 0.4
               ) {
@@ -2196,7 +2196,16 @@ async function startServer() {
                 closeReason += " Trailed SL to +40% profit. ";
                 updated = true;
               } else if (
-                progress >= 0.6 &&
+                progress >= 0.45 &&
+                signal.stopLoss <
+                  signal.entry + (signal.target - signal.entry) * 0.2
+              ) {
+                signal.stopLoss =
+                  signal.entry + (signal.target - signal.entry) * 0.2;
+                closeReason += " Trailed SL to +20% profit. ";
+                updated = true;
+              } else if (
+                progress >= 0.25 &&
                 signal.stopLoss < signal.entry * 1.002
               ) {
                 signal.stopLoss = signal.entry * 1.002;
@@ -2257,7 +2266,7 @@ async function startServer() {
                 closeReason += " Trailed SL to +70% profit. ";
                 updated = true;
               } else if (
-                progress >= 0.75 &&
+                progress >= 0.65 &&
                 signal.stopLoss >
                   signal.entry - (signal.entry - signal.target) * 0.4
               ) {
@@ -2266,7 +2275,16 @@ async function startServer() {
                 closeReason += " Trailed SL to +40% profit. ";
                 updated = true;
               } else if (
-                progress >= 0.6 &&
+                progress >= 0.45 &&
+                signal.stopLoss >
+                  signal.entry - (signal.entry - signal.target) * 0.2
+              ) {
+                signal.stopLoss =
+                  signal.entry - (signal.entry - signal.target) * 0.2;
+                closeReason += " Trailed SL to +20% profit. ";
+                updated = true;
+              } else if (
+                progress >= 0.25 &&
                 signal.stopLoss > signal.entry * 0.998
               ) {
                 signal.stopLoss = signal.entry * 0.998;
@@ -2411,13 +2429,20 @@ async function startServer() {
               closeReason += " Trailed SL to +70% profit. ";
               updated = true;
             } else if (
-              userProgress >= 0.75 &&
+              userProgress >= 0.65 &&
               ut.stopLoss < entry + (target - entry) * 0.4
             ) {
               ut.stopLoss = entry + (target - entry) * 0.4;
               closeReason += " Trailed SL to +40% profit. ";
               updated = true;
-            } else if (userProgress >= 0.6 && ut.stopLoss < entry * 1.002) {
+            } else if (
+              userProgress >= 0.45 &&
+              ut.stopLoss < entry + (target - entry) * 0.2
+            ) {
+              ut.stopLoss = entry + (target - entry) * 0.2;
+              closeReason += " Trailed SL to +20% profit. ";
+              updated = true;
+            } else if (userProgress >= 0.25 && ut.stopLoss < entry * 1.002) {
               ut.stopLoss = entry * 1.002;
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
@@ -2474,13 +2499,20 @@ async function startServer() {
               closeReason += " Trailed SL to +70% profit. ";
               updated = true;
             } else if (
-              userProgress >= 0.75 &&
+              userProgress >= 0.65 &&
               ut.stopLoss > entry - (entry - target) * 0.4
             ) {
               ut.stopLoss = entry - (entry - target) * 0.4;
               closeReason += " Trailed SL to +40% profit. ";
               updated = true;
-            } else if (userProgress >= 0.6 && ut.stopLoss > entry * 0.998) {
+            } else if (
+              userProgress >= 0.45 &&
+              ut.stopLoss > entry - (entry - target) * 0.2
+            ) {
+              ut.stopLoss = entry - (entry - target) * 0.2;
+              closeReason += " Trailed SL to +20% profit. ";
+              updated = true;
+            } else if (userProgress >= 0.25 && ut.stopLoss > entry * 0.998) {
               ut.stopLoss = entry * 0.998;
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
