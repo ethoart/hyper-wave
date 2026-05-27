@@ -747,10 +747,10 @@ async function startServer() {
         rr = (entryPrice - targetPrice) / (slPrice - entryPrice);
       }
 
-      if (rr < 1.5) {
+      if (rr < 1.7) {
         return res.json({
           success: false,
-          message: `Trade rejected: Risk/Reward ratio ${rr.toFixed(2)} is too poor. Must be >= 1.5.`,
+          message: `Trade rejected: Risk/Reward ratio ${rr.toFixed(2)} is too poor. Must be >= 1.7.`,
         });
       }
 
@@ -1960,7 +1960,7 @@ async function startServer() {
                 } else {
                   rr = (alert.entry - alert.target) / (activeSl - alert.entry);
                 }
-                if (rr < 1.5) {
+                if (rr < 1.7) {
                   console.log(
                     `[Engine] Blocked ${alert.trend} on ${alert.symbol} due to poor global Risk/Reward: ${rr.toFixed(2)}. Target: ${alert.target}, Entry: ${alert.entry}, SL: ${activeSl}`,
                   );
@@ -2175,7 +2175,7 @@ async function startServer() {
                 (signal.amount || 10) *
                 curLeverage;
               let progress =
-                (price - signal.entry) / (signal.target - signal.entry);
+                (highPrice - signal.entry) / (signal.target - signal.entry);
               let updated = false;
               if (
                 progress >= 0.85 &&
@@ -2197,9 +2197,9 @@ async function startServer() {
                 updated = true;
               } else if (
                 progress >= 0.6 &&
-                signal.stopLoss < signal.entry * 1.0005
+                signal.stopLoss < signal.entry * 1.002
               ) {
-                signal.stopLoss = signal.entry * 1.0005;
+                signal.stopLoss = signal.entry * 1.002;
                 closeReason += " Trailed SL to Break Even. ";
                 updated = true;
               }
@@ -2245,7 +2245,7 @@ async function startServer() {
                 (signal.amount || 10) *
                 curLeverage;
               let progress =
-                (signal.entry - price) / (signal.entry - signal.target);
+                (signal.entry - lowPrice) / (signal.entry - signal.target);
               let updated = false;
               if (
                 progress >= 0.85 &&
@@ -2267,9 +2267,9 @@ async function startServer() {
                 updated = true;
               } else if (
                 progress >= 0.6 &&
-                signal.stopLoss > signal.entry * 0.9995
+                signal.stopLoss > signal.entry * 0.998
               ) {
-                signal.stopLoss = signal.entry * 0.9995;
+                signal.stopLoss = signal.entry * 0.998;
                 closeReason += " Trailed SL to Break Even. ";
                 updated = true;
               }
@@ -2400,7 +2400,7 @@ async function startServer() {
           if (ut.side === "BUY") {
             let currentPnl =
               ((price - entry) / entry) * ut.amount * (ut.leverage || 10);
-            if (target) userProgress = (price - entry) / (target - entry);
+            if (target) userProgress = (highPrice - entry) / (target - entry);
 
             let updated = false;
             if (
@@ -2417,8 +2417,8 @@ async function startServer() {
               ut.stopLoss = entry + (target - entry) * 0.4;
               closeReason += " Trailed SL to +40% profit. ";
               updated = true;
-            } else if (userProgress >= 0.6 && ut.stopLoss < entry * 1.001) {
-              ut.stopLoss = entry * 1.001;
+            } else if (userProgress >= 0.6 && ut.stopLoss < entry * 1.002) {
+              ut.stopLoss = entry * 1.002;
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
             }
@@ -2463,7 +2463,7 @@ async function startServer() {
           } else if (ut.side === "SELL") {
             let currentPnl =
               ((entry - price) / entry) * ut.amount * (ut.leverage || 10);
-            if (target) userProgress = (entry - price) / (entry - target);
+            if (target) userProgress = (entry - lowPrice) / (entry - target);
 
             let updated = false;
             if (
@@ -2480,8 +2480,8 @@ async function startServer() {
               ut.stopLoss = entry - (entry - target) * 0.4;
               closeReason += " Trailed SL to +40% profit. ";
               updated = true;
-            } else if (userProgress >= 0.6 && ut.stopLoss > entry * 0.999) {
-              ut.stopLoss = entry * 0.999;
+            } else if (userProgress >= 0.6 && ut.stopLoss > entry * 0.998) {
+              ut.stopLoss = entry * 0.998;
               closeReason += " Trailed SL to Break Even. ";
               updated = true;
             }

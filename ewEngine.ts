@@ -302,9 +302,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = suggestedEntry - validStopLoss;
         const reward = finalTargetCopy - suggestedEntry;
-        if (risk <= 0 || reward / risk < 1.25) {
-            isInvalidated = true; // RR < 1.25 is skipped
-            console.log(`[EW] Invalidated: RR < 1.25. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
+        if (risk <= 0 || reward / risk < 1.7) {
+            isInvalidated = true; // RR < 1.7 is skipped
+            console.log(`[EW] Invalidated: RR < 1.7. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Only accept if not invalidated securely
@@ -316,7 +316,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            let recLeverage = termStyle === 'SCALP_TRADE' || termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -419,9 +419,9 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         // Risk/Reward enforcing
         const risk = validStopLoss - suggestedEntry;
         const reward = suggestedEntry - finalTargetCopy;
-        if (risk <= 0 || reward / risk < 1.25) {
-            isInvalidated = true; // RR < 1.25 is skipped
-            console.log(`[EW Bearish] Invalidated: RR < 1.25. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
+        if (risk <= 0 || reward / risk < 1.7) {
+            isInvalidated = true; // RR < 1.7 is skipped
+            console.log(`[EW Bearish] Invalidated: RR < 1.7. risk=${risk}, reward=${reward}, ratio=${reward/risk}`);
         }
 
         // Check if clamped SL invalidates the trade
@@ -433,7 +433,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            let recLeverage = termStyle === 'SCALP_TRADE' || termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -471,7 +471,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       console.log(`[EW] Found setup, score=${highestScore}, termStyle=${bestSetup.termStyle}`);
   }
 
-  if (!bestSetup || highestScore < 95) {
+  if (!bestSetup || highestScore < 105) {
     return analyzeAdvancedTA(data, interval, tradeStyle, termStyle, bullishConfirmations, bearishConfirmations);
   }
 
