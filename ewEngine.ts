@@ -243,7 +243,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       // Basic directional checks - if it's completely wrong direction, then skip
       if (w1 <= start || w3 <= w2) continue;
 
-      if (ema200 && w4 < ema200) continue; // Bullish needs price > 200 EMA
+      if (ema200 && currentPrice < ema200) continue; // Bullish strictly needs price > 200 EMA
 
       if (w2 <= start) continue; // W2 must not go below start
       if (w4 <= w1 * 0.99) continue; // W4 shouldn't overlap W1 too much
@@ -316,7 +316,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(5, Math.min(20, (score / 100) * 15))) : Math.floor(Math.max(3, Math.min(10, (score / 100) * 8)));
             bestSetup = {
               leverage: recLeverage,
               score,
@@ -360,7 +360,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       
       if (w1 >= start || w3 >= w2) continue; // Basic directional check
 
-      if (ema200 && w4 > ema200) continue; // Bearish needs price < 200 EMA
+      let currentPrice = data[data.length - 1].close;
+      if (ema200 && currentPrice > ema200) continue; // Bearish strictly needs price < 200 EMA
 
       if (w2 >= start) continue; // W2 must not go above start
       if (w4 >= w1 * 1.01) continue; // W4 shouldn't overlap W1 too much
@@ -433,7 +434,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
         if (!isInvalidated) {
             const gainPct = (Math.abs(finalTargetCopy - suggestedEntry) / suggestedEntry * 100).toFixed(2);
     
-            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(10, Math.min(50, (score / 100) * 30))) : Math.floor(Math.max(3, Math.min(15, (score / 100) * 10)));
+            let recLeverage = termStyle === 'SHORT_TERM' || tradeStyle === 'SCALP TRADE' ? Math.floor(Math.max(5, Math.min(20, (score / 100) * 15))) : Math.floor(Math.max(3, Math.min(10, (score / 100) * 8)));
             bestSetup = {
               leverage: recLeverage,
               score,

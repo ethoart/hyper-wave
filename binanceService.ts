@@ -180,15 +180,35 @@ export async function getBinancePositions(customKey?: string, customSecret?: str
     });
     
     if (positionRes.data && positionRes.data.length > 0) {
-       return positionRes.data.filter((pos: any) => parseFloat(pos.positionAmt) !== 0).map((pos: any) => ({
-           symbol: pos.symbol,
-           amount: Math.abs(parseFloat(pos.positionAmt)),
-           side: parseFloat(pos.positionAmt) > 0 ? 'BUY' : 'SELL',
-           entryPrice: parseFloat(pos.entryPrice),
-           unRealizedProfit: parseFloat(pos.unRealizedProfit),
-           leverage: pos.leverage,
-           markPrice: parseFloat(pos.markPrice)
-       }));
+       const activePositions = positionRes.data.filter((pos: any) => parseFloat(pos.positionAmt) !== 0);
+       
+       if (activePositions.length > 0) {
+           let openOrders: any = [];
+           try {
+              let ordersQuery = `timestamp=${Date.now()}`;
+              const ordersSig = createSignature(ordersQuery, secretKey);
+              const ordersRes = await axios.get(`${baseUrl}/fapi/v1/openOrders?${ordersQuery}&signature=${ordersSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+              openOrders = ordersRes.data;
+           } catch(e) {}
+
+           return activePositions.map((pos: any) => {
+               const symbolOrders = openOrders.filter((o: any) => o.symbol === pos.symbol);
+               const slOrder = symbolOrders.find((o: any) => o.type === 'STOP_MARKET');
+               const tpOrder = symbolOrders.find((o: any) => o.type === 'TAKE_PROFIT_MARKET');
+               
+               return {
+                   symbol: pos.symbol,
+                   amount: Math.abs(parseFloat(pos.positionAmt)),
+                   side: parseFloat(pos.positionAmt) > 0 ? 'BUY' : 'SELL',
+                   entryPrice: parseFloat(pos.entryPrice),
+                   unRealizedProfit: parseFloat(pos.unRealizedProfit),
+                   leverage: pos.leverage,
+                   markPrice: parseFloat(pos.markPrice),
+                   stopLoss: slOrder ? parseFloat(slOrder.stopPrice) : null,
+                   takeProfit: tpOrder ? parseFloat(tpOrder.stopPrice) : null
+               };
+           });
+       }
     }
     return [];
   } catch(error: any) {
@@ -224,7 +244,11 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
       headers: { 'X-MBX-APIKEY': apiKey }
     }).catch(e => console.warn(`[Binance] Cancel open orders ignored for ${symbol}`));
 
-    const positionUrl = `${baseUrl}/fapi/v2/positionRisk?${queryString}`;
+    let positionQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+    const positionSig = createSignature(positionQuery, secretKey);
+    positionQuery += `&signature=${positionSig}`;
+
+    const positionUrl = `${baseUrl}/fapi/v2/positionRisk?${positionQuery}`;
     const positionRes = await axios.get(positionUrl, {
       headers: { 'X-MBX-APIKEY': apiKey },
     });
