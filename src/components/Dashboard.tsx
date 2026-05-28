@@ -1256,7 +1256,7 @@ plot(close)"
                                                if(confirmed) {
                                                  try {
                                                     const reason = 'User manually closed';
-                                                    await axios.post('/api/trade/close', { symbol: pos.symbol, reason });
+                                                    await axios.post('/api/trade/close', { symbol: pos.symbol, reason, binanceOrderId: pos.binanceOrderId });
                                                     alert("Closed!");
                                                     fetchTrades();
                                                  } catch(err:any) { alert(err.response?.data?.error || err.message); }

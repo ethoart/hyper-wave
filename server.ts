@@ -1244,13 +1244,13 @@ async function startServer() {
         .status(403)
         .json({ error: "Only PRO users and Admins can manage trades" });
     }
-    const { symbol, reason } = req.body;
+    const { symbol, reason, binanceOrderId } = req.body;
     try {
       const userPaperTrade = await UserTrade.findOne({
         userId: req.user._id,
         symbol,
         status: "live",
-        binanceOrderId: /^paper_/,
+        ...(binanceOrderId ? { binanceOrderId } : { binanceOrderId: /^paper_/ })
       });
       if (userPaperTrade) {
         let realizedPnl = 0;
@@ -1291,6 +1291,7 @@ async function startServer() {
         userId: req.user._id,
         symbol,
         status: "live",
+        ...(binanceOrderId ? { binanceOrderId } : {})
       });
       if (binanceTrade && reason) {
         binanceTrade.closeReason = reason || "Manually closed by user";
@@ -1303,15 +1304,15 @@ async function startServer() {
       try {
         const result: any = await closeBinancePosition(symbol, apiKey, secretKey);
         if (result && !result.success) {
+           if (result.message && result.message.includes('No open position')) {
+               return res.json({ success: true, message: 'Position already closed' });
+           }
            return res.status(400).json({ error: result.message });
         }
         res.json(result);
-      } catch (err: any) {
-        if (err.message && err.message.includes('No open position')) {
-           res.json({ success: true, message: 'Position already closed' });
-        } else {
-           throw err;
-        }
+      } catch (e: any) {
+        console.error(e);
+        res.status(500).json({ error: e.stack || e.message });
       }
     } catch (e: any) {
       console.error(e);
