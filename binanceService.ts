@@ -258,17 +258,22 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
       if (position) {
         const positionAmt = parseFloat(position.positionAmt);
         const side = positionAmt > 0 ? 'SELL' : 'BUY';
-        const qty = Math.abs(positionAmt);
+        const qtyStr = position.positionAmt.startsWith('-') ? position.positionAmt.substring(1) : position.positionAmt;
+        const positionSide = position.positionSide || 'BOTH';
         
         // Place market order to close
-        let closeQueryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${qty}&reduceOnly=true&timestamp=${Date.now()}`;
+        let closeQueryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${qtyStr}`;
+        if (positionSide !== 'BOTH') {
+            closeQueryString += `&positionSide=${positionSide}`;
+        }
+        closeQueryString += `&reduceOnly=true&timestamp=${Date.now()}`;
         const closeSignature = createSignature(closeQueryString, secretKey);
         closeQueryString += `&signature=${closeSignature}`;
         
         await axios.post(`${baseUrl}/fapi/v1/order?${closeQueryString}`, null, {
            headers: { 'X-MBX-APIKEY': apiKey },
         });
-        return { success: true, message: `Closed position of ${qty} ${symbol}` };
+        return { success: true, message: `Closed position of ${qtyStr} ${symbol}` };
       }
     }
     return { success: false, message: 'No open position to close' };

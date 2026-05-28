@@ -1244,7 +1244,8 @@ async function startServer() {
         .status(403)
         .json({ error: "Only PRO users and Admins can manage trades" });
     }
-    const { symbol, reason, binanceOrderId } = req.body;
+    const { symbol: rawSymbol, reason, binanceOrderId } = req.body;
+    const symbol = rawSymbol?.toUpperCase();
     try {
       const userPaperTrade = await UserTrade.findOne({
         userId: req.user._id,
