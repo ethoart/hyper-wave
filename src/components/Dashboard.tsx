@@ -1228,6 +1228,10 @@ plot(close)"
                                               Margin: ${pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') ? pos.amount.toFixed(2) : (pos.amount * pos.entryPrice / pos.leverage).toFixed(2)} | Size: ${pos.binanceOrderId && pos.binanceOrderId.startsWith('paper_') ? (pos.amount * pos.leverage).toFixed(2) : (pos.amount * pos.entryPrice).toFixed(2)} ({pos.leverage}x)
                                             </span>
                                          </div>
+                                         <div className="flex justify-between items-center w-full mb-1">
+                                            <span className="text-xs text-[#787b86]">Take Profit: {pos.takeProfit ? pos.takeProfit.toFixed(4) : '-'}</span>
+                                            <span className="text-xs text-[#787b86]">Stop Loss: {pos.stopLoss ? pos.stopLoss.toFixed(4) : '-'}</span>
+                                         </div>
                                          <div className="flex gap-2 mt-2 pt-2 border-t border-[#2a2e39]">
                                            <button 
                                              onClick={async (e) => {

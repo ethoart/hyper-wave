@@ -274,7 +274,7 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
     return { success: false, message: 'No open position to close' };
   } catch (error: any) {
      console.error("Close position error:", error.response?.data || error.message);
-     throw new Error(error.response?.data?.msg || 'Failed to close position');
+     return { success: false, message: error.response?.data?.msg || 'Failed to close position on Binance' };
   }
 }
 

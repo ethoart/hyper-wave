@@ -1298,8 +1298,16 @@ async function startServer() {
       }
       const apiKey = user?.binanceApiKey;
       const secretKey = user?.binanceSecretKey;
-      const result = await closeBinancePosition(symbol, apiKey, secretKey);
-      res.json(result);
+      try {
+        const result = await closeBinancePosition(symbol, apiKey, secretKey);
+        res.json(result);
+      } catch (err: any) {
+        if (err.message && err.message.includes('No open position')) {
+           res.json({ success: true, message: 'Position already closed' });
+        } else {
+           throw err;
+        }
+      }
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

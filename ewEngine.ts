@@ -162,6 +162,8 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
     // If price dumped massively, it has bearish momentum.
     // Additionally, consider RSI if available
     let isBull = false; // Default
+    const entry = data[len-1].close;
+
     if (data.length > 30) {
        const period = 14;
        let gains = 0, losses = 0;
@@ -173,19 +175,17 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
        let avgGain = gains / period;
        let avgLoss = losses / period;
        let currentRsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
-       
-       if (currentRsi > 65) {
+
+       if (currentRsi > 55 && (!ema200 || entry > ema200)) {
            isBull = true; // Momentum -> Bullish
-       } else if (currentRsi < 35) {
+       } else if (currentRsi < 45 && (!ema200 || entry < ema200)) {
            isBull = false; // Momentum -> Bearish
        } else {
-           return null; // Don't take trade, chop zone
+           return null; // Don't take trade, chop zone or opposing trend
        }
     } else {
        return null; // Not enough data
     }
-
-    const entry = data[len-1].close;
     
     let target = isBull ? entry * 1.03 : entry * 0.97;
     let stop = isBull ? entry * 0.985 : entry * 1.015; // Simple 1.5% risk
@@ -243,7 +243,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
       // Basic directional checks - if it's completely wrong direction, then skip
       if (w1 <= start || w3 <= w2) continue;
 
-      if (ema200 && currentPrice < ema200) continue; // Bullish strictly needs price > 200 EMA
+      if (ema200 && w4 < ema200) continue; // Bullish strictly needs price > 200 EMA
 
       if (w2 <= start) continue; // W2 must not go below start
       if (w4 <= w1 * 0.99) continue; // W4 shouldn't overlap W1 too much
