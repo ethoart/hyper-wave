@@ -230,9 +230,9 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
     });
     
     if (positionRes.data && positionRes.data.length > 0) {
-      const position = positionRes.data[0];
-      const positionAmt = parseFloat(position.positionAmt);
-      if (positionAmt !== 0) {
+      const position = positionRes.data.find((p: any) => parseFloat(p.positionAmt) !== 0);
+      if (position) {
+        const positionAmt = parseFloat(position.positionAmt);
         const side = positionAmt > 0 ? 'SELL' : 'BUY';
         const qty = Math.abs(positionAmt);
         

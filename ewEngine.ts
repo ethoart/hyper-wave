@@ -516,7 +516,7 @@ function analyzeAdvancedTA(
     const curUpperBB = bb.upper[bb.upper.length - 1];
     const curLowerBB = bb.lower[bb.lower.length - 1];
     
-    let score = Math.max(0, bullishConfirmations.length * 15 + bearishConfirmations.length * 15);
+    let baseScore = 0;
     
     let isBullish = false;
     let isBearish = false;
@@ -528,16 +528,16 @@ function analyzeAdvancedTA(
         if (curEma20 > curEma50) {
             if (curHist > 0 && prevHist <= 0) { // MACD crossing up
                 isBullish = true;
-                score += 80;
+                baseScore += 80;
                 reason += "✅ MACD Bullish Cross over zero line.\n";
             } else if (curHist > prevHist && curHist > 0) {
                 isBullish = true;
-                score += 50;
+                baseScore += 50;
                 reason += "✅ MACD expanding positively.\n";
             }
             if (currentPrice > curEma20 && lows[lows.length-2] <= curEma20) {
                 isBullish = true;
-                score += 60;
+                baseScore += 60;
                 reason += "✅ Bouncing strongly off EMA20 Support.\n";
             }
         }
@@ -548,16 +548,16 @@ function analyzeAdvancedTA(
         if (curEma20 < curEma50) {
             if (curHist < 0 && prevHist >= 0) { // MACD crossing down
                 isBearish = true;
-                score += 80;
+                baseScore += 80;
                 reason += "✅ MACD Bearish Cross under zero line.\n";
             } else if (curHist < prevHist && curHist < 0) {
                 isBearish = true;
-                score += 50;
+                baseScore += 50;
                 reason += "✅ MACD expanding negatively.\n";
             }
             if (currentPrice < curEma20 && highs[highs.length-2] >= curEma20) {
                 isBearish = true;
-                score += 60;
+                baseScore += 60;
                 reason += "✅ Rejecting strongly off EMA20 Resistance.\n";
             }
         }
@@ -566,18 +566,22 @@ function analyzeAdvancedTA(
     // Oversold / Overbought bounce (Must be aligned with major trend)
     if (currentPrice > curEma200 && closes[closes.length-1] > curLowerBB && lows[lows.length-2] <= bb.lower[bb.lower.length-2]) {
         isBullish = true;
-        score += 70;
+        baseScore += 70;
         reason += "✅ Mean Reversion: Strong bounce from Bottom Bollinger Band in Bull Market.\n";
     }
     if (currentPrice < curEma200 && closes[closes.length-1] < curUpperBB && highs[highs.length-2] >= bb.upper[bb.upper.length-2]) {
         isBearish = true;
-        score += 70;
+        baseScore += 70;
         reason += "✅ Mean Reversion: Strong rejection from Top Bollinger Band in Bear Market.\n";
     }
 
     if (isBullish && isBearish) return null; 
     
-    if (score < 160) return null; // Require extreme combinations of TA
+    let finalScore = baseScore;
+    if (isBullish) finalScore += bullishConfirmations.length * 15;
+    if (isBearish) finalScore += bearishConfirmations.length * 15;
+
+    if (finalScore < 160) return null; // Require extreme combinations of TA
     
     let target, stopLoss;
     
@@ -586,12 +590,12 @@ function analyzeAdvancedTA(
         target = currentPrice + curAtr * 5; // 1:2.5 Risk Reward Minimum
         if (curUpperBB > target) target = curUpperBB;
         
-        let recLeverage = Math.floor(Math.max(5, Math.min(15, (score / 100) * 10)));
+        let recLeverage = Math.floor(Math.max(5, Math.min(15, (finalScore / 100) * 10)));
         const gainPct = (Math.abs(target - currentPrice) / currentPrice * 100).toFixed(2);
         
         return {
               leverage: recLeverage,
-              score,
+              score: finalScore,
               trend: 'bullish',
               params: { model: 'AdvancedTA', type: 'MACD+BB+ATR+EMA' },
               waves: null,
@@ -612,12 +616,12 @@ function analyzeAdvancedTA(
         target = currentPrice - curAtr * 5; // 1:2.5 Risk Reward Minimum
         if (curLowerBB < target) target = curLowerBB;
         
-        let recLeverage = Math.floor(Math.max(5, Math.min(15, (score / 100) * 10)));
+        let recLeverage = Math.floor(Math.max(5, Math.min(15, (finalScore / 100) * 10)));
         const gainPct = (Math.abs(currentPrice - target) / currentPrice * 100).toFixed(2);
         
         return {
               leverage: recLeverage,
-              score,
+              score: finalScore,
               trend: 'bearish',
               params: { model: 'AdvancedTA', type: 'MACD+BB+ATR+EMA' },
               waves: null,
