@@ -92,6 +92,14 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
 
   try {
     const baseUrl = getBaseUrl();
+    
+    // Clear any previous leftover orders so they don't intervene with the new position
+    try {
+        const cancelAllQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+        const cancelAllSig = createSignature(cancelAllQuery, secretKey);
+        await axios.delete(`${baseUrl}/fapi/v1/allOpenOrders?${cancelAllQuery}&signature=${cancelAllSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+    } catch (e) {}
+
     const url = `${baseUrl}/fapi/v1/order?${queryString}`;
     const response = await axios.post(url, null, {
       headers: {
@@ -193,8 +201,8 @@ export async function getBinancePositions(customKey?: string, customSecret?: str
 
            return activePositions.map((pos: any) => {
                const symbolOrders = openOrders.filter((o: any) => o.symbol === pos.symbol);
-               const slOrder = symbolOrders.find((o: any) => o.type === 'STOP_MARKET');
-               const tpOrder = symbolOrders.find((o: any) => o.type === 'TAKE_PROFIT_MARKET');
+               const slOrder = symbolOrders.find((o: any) => o.type === 'STOP_MARKET' || o.type === 'STOP');
+               const tpOrder = symbolOrders.find((o: any) => o.type === 'TAKE_PROFIT_MARKET' || o.type === 'TAKE_PROFIT');
                
                return {
                    symbol: pos.symbol,
@@ -273,6 +281,16 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
         await axios.post(`${baseUrl}/fapi/v1/order?${closeQueryString}`, null, {
            headers: { 'X-MBX-APIKEY': apiKey },
         });
+
+        // Cancel all existing open orders (leftover TP/SL)
+        try {
+           const cancelAllQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+           const cancelAllSig = createSignature(cancelAllQuery, secretKey);
+           await axios.delete(`${baseUrl}/fapi/v1/allOpenOrders?${cancelAllQuery}&signature=${cancelAllSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+        } catch(err) {
+           console.warn(`Failed to cancel all open orders for ${symbol} after close`, err);
+        }
+
         return { success: true, message: `Closed position of ${qtyStr} ${symbol}` };
       }
     }
