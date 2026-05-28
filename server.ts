@@ -136,6 +136,7 @@ const userTradeSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   resolvedAt: Date,
   closeReason: String,
+  realizedPnl: Number,
 });
 const UserTrade: any =
   mongoose.models.UserTrade || mongoose.model("UserTrade", userTradeSchema);
@@ -1258,16 +1259,17 @@ async function startServer() {
             `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`,
           );
           const currentPrice = parseFloat(tickRes.data.price);
+          const entryPrice = userPaperTrade.entry || userPaperTrade.entryPrice;
           if (userPaperTrade.side === "BUY") {
             realizedPnl =
-              ((currentPrice - userPaperTrade.entryPrice) /
-                userPaperTrade.entryPrice) *
+              ((currentPrice - entryPrice) /
+                entryPrice) *
               userPaperTrade.amount *
               (userPaperTrade.leverage || 10);
           } else {
             realizedPnl =
-              ((userPaperTrade.entryPrice - currentPrice) /
-                userPaperTrade.entryPrice) *
+              ((entryPrice - currentPrice) /
+                entryPrice) *
               userPaperTrade.amount *
               (userPaperTrade.leverage || 10);
           }
@@ -1299,7 +1301,10 @@ async function startServer() {
       const apiKey = user?.binanceApiKey;
       const secretKey = user?.binanceSecretKey;
       try {
-        const result = await closeBinancePosition(symbol, apiKey, secretKey);
+        const result: any = await closeBinancePosition(symbol, apiKey, secretKey);
+        if (result && !result.success) {
+           return res.status(400).json({ error: result.message });
+        }
         res.json(result);
       } catch (err: any) {
         if (err.message && err.message.includes('No open position')) {
@@ -1309,7 +1314,8 @@ async function startServer() {
         }
       }
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      console.error(e);
+      res.status(500).json({ error: e.stack || e.message });
     }
   });
 

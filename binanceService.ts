@@ -223,7 +223,7 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
   const secretKey = customSecret || (isTestnet ? process.env.BINANCE_TESTNET_SECRET_KEY : process.env.BINANCE_SECRET_KEY) || process.env.BINANCE_SECRET_KEY;
   
   if (!apiKey || !secretKey) {
-    throw new Error("Binance API keys are not configured in .env");
+    return { success: false, message: "Binance API keys are not configured" };
   }
 
   const timestamp = Date.now();
