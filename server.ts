@@ -1226,6 +1226,19 @@ async function startServer() {
           { headers: { "X-MBX-APIKEY": apiKey } },
         );
       }
+
+      // Update db record
+      const ut = await UserTrade.findOne({
+         userId: req.user._id,
+         symbol,
+         status: "live",
+      });
+      if (ut) {
+         if (tp) ut.target = parseFloat(tp);
+         if (sl) ut.stopLoss = parseFloat(sl);
+         await ut.save();
+      }
+
       res.json({ success: true, message: "TP / SL updated on Binance" });
     } catch (err: any) {
       console.error("TPSL Update Error", err.response?.data || err.message);

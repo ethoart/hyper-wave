@@ -116,7 +116,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
         let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${Date.now()}`;
         const tpSig = createSignature(tpQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
-      } catch(e) { console.warn("Failed to place native TP", e); }
+      } catch(e: any) { console.warn(`Failed to place native TP for ${symbol}:`, e.response?.data || e.message); }
     }
 
     if (finalSL) {
@@ -125,7 +125,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
         let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${Date.now()}`;
         const slSig = createSignature(slQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
-      } catch(e) { console.warn("Failed to place native SL", e); }
+      } catch(e: any) { console.warn(`Failed to place native SL for ${symbol}:`, e.response?.data || e.message); }
     }
 
     return response.data;
@@ -251,6 +251,9 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
     await axios.delete(`${baseUrl}/fapi/v1/allOpenOrders?${cancelQuery}`, {
       headers: { 'X-MBX-APIKEY': apiKey }
     }).catch(e => console.warn(`[Binance] Cancel open orders ignored for ${symbol}`));
+
+    // Wait for Binance matching engine to clear the open orders
+    await new Promise(r => setTimeout(r, 1000));
 
     let positionQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
     const positionSig = createSignature(positionQuery, secretKey);
