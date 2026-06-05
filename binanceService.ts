@@ -109,11 +109,36 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
 
     await new Promise(r => setTimeout(r, 1000)); // wait for market order to fill
 
+    // To prevent "ReduceOnly Order is rejected" when placing new TP/SL, cancel old ones first
+    try {
+        const cancelAllQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+        const cancelAllSig = createSignature(cancelAllQuery, secretKey);
+        await axios.delete(`${baseUrl}/fapi/v1/allOpenOrders?${cancelAllQuery}&signature=${cancelAllSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+    } catch(e) {}
+
+    // Fetch position to handle Hedge Mode correctly
+    let posParams = '&closePosition=true';
+    try {
+        const positionQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+        const positionSig = createSignature(positionQuery, secretKey);
+        const positionRes = await axios.get(`${baseUrl}/fapi/v2/positionRisk?${positionQuery}&signature=${positionSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+        if (positionRes.data && positionRes.data.length > 0) {
+            const position = positionRes.data.find((p: any) => parseFloat(p.positionAmt) !== 0);
+            if (position) {
+                const positionSide = position.positionSide || 'BOTH';
+                if (positionSide !== 'BOTH') {
+                    const qtyStr = position.positionAmt.startsWith('-') ? position.positionAmt.substring(1) : position.positionAmt;
+                    posParams = `&positionSide=${positionSide}&quantity=${qtyStr}`;
+                }
+            }
+        }
+    } catch(e) {}
+
     // Native Binance Stop Loss / Take profit placement
     if (finalTP) {
       try {
         const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
-        let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}&closePosition=true&timestamp=${Date.now()}`;
+        let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}${posParams}&timestamp=${Date.now()}`;
         const tpSig = createSignature(tpQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
       } catch(e: any) { console.warn(`Failed to place native TP for ${symbol}:`, e.response?.data || e.message); }
@@ -122,7 +147,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
     if (finalSL) {
       try {
         const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-        let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${Date.now()}`;
+        let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}${posParams}&timestamp=${Date.now()}`;
         const slSig = createSignature(slQuery, secretKey);
         await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
       } catch(e: any) { console.warn(`Failed to place native SL for ${symbol}:`, e.response?.data || e.message); }
@@ -276,8 +301,10 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
         let closeQueryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${qtyStr}`;
         if (positionSide !== 'BOTH') {
             closeQueryString += `&positionSide=${positionSide}`;
+        } else {
+            closeQueryString += `&reduceOnly=true`;
         }
-        closeQueryString += `&reduceOnly=true&timestamp=${Date.now()}`;
+        closeQueryString += `&timestamp=${Date.now()}`;
         const closeSignature = createSignature(closeQueryString, secretKey);
         closeQueryString += `&signature=${closeSignature}`;
         
@@ -326,12 +353,11 @@ export async function updateBinanceStopLoss(symbol: string, side: 'BUY' | 'SELL'
   }
 
   try {
-    // 1. Fetch open orders for symbol
+    // 1. Cancel existing STOP_MARKET orders
     const openOrdersQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
     const openOrdersSig = createSignature(openOrdersQuery, secretKey);
     const openOrders = await axios.get(`${baseUrl}/fapi/v1/openOrders?${openOrdersQuery}&signature=${openOrdersSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
 
-    // 2. Cancel existing STOP_MARKET orders
     for (const order of openOrders.data) {
        if (order.type === 'STOP_MARKET') {
            const cancelQuery = `symbol=${symbol}&orderId=${order.orderId}&timestamp=${Date.now()}`;
@@ -340,9 +366,25 @@ export async function updateBinanceStopLoss(symbol: string, side: 'BUY' | 'SELL'
        }
     }
 
-    // 3. Place new STOP_MARKET order
+    // 2. Determine position mode and place order
+    const positionQuery = `symbol=${symbol}&timestamp=${Date.now()}`;
+    const positionSig = createSignature(positionQuery, secretKey);
+    const positionRes = await axios.get(`${baseUrl}/fapi/v2/positionRisk?${positionQuery}&signature=${positionSig}`, { headers: { 'X-MBX-APIKEY': apiKey } });
+    
+    let posParams = '&closePosition=true';
+    if (positionRes.data && positionRes.data.length > 0) {
+      const position = positionRes.data.find((p: any) => parseFloat(p.positionAmt) !== 0);
+      if (position) {
+         const positionSide = position.positionSide || 'BOTH';
+         if (positionSide !== 'BOTH') {
+             const qtyStr = position.positionAmt.startsWith('-') ? position.positionAmt.substring(1) : position.positionAmt;
+             posParams = `&positionSide=${positionSide}&quantity=${qtyStr}`;
+         }
+      }
+    }
+
     const slSide = side === 'BUY' ? 'SELL' : 'BUY';
-    const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}&closePosition=true&timestamp=${Date.now()}`;
+    const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}${posParams}&timestamp=${Date.now()}`;
     const slSig = createSignature(slQuery, secretKey);
     await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
     

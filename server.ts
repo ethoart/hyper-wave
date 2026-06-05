@@ -1264,7 +1264,7 @@ async function startServer() {
         userId: req.user._id,
         symbol,
         status: "live",
-        ...(binanceOrderId ? { binanceOrderId } : { binanceOrderId: /^paper_/ })
+        binanceOrderId: /^paper_/
       });
       if (userPaperTrade) {
         let realizedPnl = 0;
