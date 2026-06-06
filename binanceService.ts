@@ -10,6 +10,25 @@ function createSignature(queryString: string, secret: string) {
   return crypto.createHmac('sha256', secret).update(queryString).digest('hex');
 }
 
+async function retryOrder(fn: () => Promise<any>, retries = 5, delay = 800) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const msg = e.response?.data?.msg || '';
+      const code = e.response?.data?.code;
+      if (
+        i < retries - 1 &&
+        (msg.includes('ReduceOnly') || code === -2022 || msg.includes('position'))
+      ) {
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 let exchangeInfoCache: any = null;
 
 async function getExchangeInfo() {
@@ -140,7 +159,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
         const tpSide = side === 'BUY' ? 'SELL' : 'BUY';
         let tpQuery = `symbol=${symbol}&side=${tpSide}&type=TAKE_PROFIT_MARKET&stopPrice=${finalTP}${posParams}&timestamp=${Date.now()}`;
         const tpSig = createSignature(tpQuery, secretKey);
-        await axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+        await retryOrder(() => axios.post(`${baseUrl}/fapi/v1/order?${tpQuery}&signature=${tpSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }));
       } catch(e: any) { console.warn(`Failed to place native TP for ${symbol}:`, e.response?.data || e.message); }
     }
 
@@ -149,7 +168,7 @@ export async function placeBinanceTrade(symbol: string, side: 'BUY' | 'SELL', qu
         const slSide = side === 'BUY' ? 'SELL' : 'BUY';
         let slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}${posParams}&timestamp=${Date.now()}`;
         const slSig = createSignature(slQuery, secretKey);
-        await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+        await retryOrder(() => axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }));
       } catch(e: any) { console.warn(`Failed to place native SL for ${symbol}:`, e.response?.data || e.message); }
     }
 
@@ -308,9 +327,9 @@ export async function closeBinancePosition(symbol: string, customKey?: string, c
         const closeSignature = createSignature(closeQueryString, secretKey);
         closeQueryString += `&signature=${closeSignature}`;
         
-        await axios.post(`${baseUrl}/fapi/v1/order?${closeQueryString}`, null, {
+        await retryOrder(() => axios.post(`${baseUrl}/fapi/v1/order?${closeQueryString}`, null, {
            headers: { 'X-MBX-APIKEY': apiKey },
-        });
+        }));
 
         // Cancel all existing open orders (leftover TP/SL)
         try {
@@ -386,7 +405,7 @@ export async function updateBinanceStopLoss(symbol: string, side: 'BUY' | 'SELL'
     const slSide = side === 'BUY' ? 'SELL' : 'BUY';
     const slQuery = `symbol=${symbol}&side=${slSide}&type=STOP_MARKET&stopPrice=${finalSL}${posParams}&timestamp=${Date.now()}`;
     const slSig = createSignature(slQuery, secretKey);
-    await axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } });
+    await retryOrder(() => axios.post(`${baseUrl}/fapi/v1/order?${slQuery}&signature=${slSig}`, null, { headers: { 'X-MBX-APIKEY': apiKey } }));
     
   } catch(e: any) {
     console.warn(`[Binance] Failed to update trailing SL for ${symbol}`, e.response?.data || e.message);
