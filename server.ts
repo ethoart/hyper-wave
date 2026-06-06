@@ -1307,21 +1307,28 @@ async function startServer() {
         status: "live",
         ...(binanceOrderId ? { binanceOrderId } : {})
       });
-      if (binanceTrade && reason) {
-        binanceTrade.closeReason = reason || "Manually closed by user";
-        binanceTrade.status = "closed"; // optimistic
-        binanceTrade.resolvedAt = new Date();
-        await binanceTrade.save();
-      }
       const apiKey = user?.binanceApiKey;
       const secretKey = user?.binanceSecretKey;
       try {
         const result: any = await closeBinancePosition(symbol, apiKey, secretKey);
         if (result && !result.success) {
            if (result.message && result.message.includes('No open position')) {
+               if (binanceTrade && reason) {
+                 binanceTrade.closeReason = reason;
+                 binanceTrade.status = "closed";
+                 binanceTrade.resolvedAt = new Date();
+                 await binanceTrade.save();
+               }
                return res.json({ success: true, message: 'Position already closed' });
            }
            return res.status(400).json({ error: result.message });
+        }
+        
+        if (binanceTrade && reason) {
+          binanceTrade.closeReason = reason;
+          binanceTrade.status = "closed";
+          binanceTrade.resolvedAt = new Date();
+          await binanceTrade.save();
         }
         res.json(result);
       } catch (e: any) {
@@ -1359,7 +1366,7 @@ async function startServer() {
         // Pricing Live Paper Auto Trade
         try {
           const tickRes = await axios.get(
-            `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.symbol}`,
+            `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${trade.symbol}`
           );
           const currentPrice = parseFloat(tickRes.data.price);
           const diff =
@@ -1372,6 +1379,28 @@ async function startServer() {
       trade.realizedPnl = realizedPnl;
 
       await trade.save();
+      
+      // Also close all associated live UserTrades for this auto signal
+      const liveUserTrades = await UserTrade.find({ symbol: trade.symbol, status: "live", isAuto: true });
+      for (const ut of liveUserTrades) {
+         try {
+            if (ut.binanceOrderId && !ut.binanceOrderId.startsWith("paper_")) {
+               const pUser = await User.findById(ut.userId);
+               if (pUser && pUser.binanceApiKey && pUser.binanceSecretKey) {
+                  await closeBinancePosition(ut.symbol, pUser.binanceApiKey, pUser.binanceSecretKey);
+               }
+            }
+            ut.status = "closed";
+            ut.closeReason = "Auto-trade cancelled by admin";
+            ut.resolvedAt = new Date();
+            // Estimate Pnl roughly
+            ut.realizedPnl = realizedPnl;
+            await ut.save();
+         } catch(err) {
+            console.error(`Failed to cascade close UserTrade for ${ut.userId}:`, err);
+         }
+      }
+
       res.json({ success: true, message: "Auto trade forced closed" });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
