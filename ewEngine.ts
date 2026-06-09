@@ -96,15 +96,15 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   let reason = "";
   let baseScore = 0;
 
-  // 1. MACD Momentum Check
-  const macdBullish = curHist > prevHist && curHist > 0;
-  const macdBearish = curHist < prevHist && curHist < 0;
-
-  // 2. Trend Alignment (Golden Cross / Death Cross rules)
-  const uptrend = currentPrice > curEma200 && curEma20 > curEma50;
-  const downtrend = currentPrice < curEma200 && curEma20 < curEma50;
+  // 1. Trend Alignment (Super Strict)
+  const isSuperUptrend = currentPrice > curEma200 && curEma50 > curEma200 && curEma20 > curEma50;
+  const isSuperDowntrend = currentPrice < curEma200 && curEma50 < curEma200 && curEma20 < curEma50;
   
-  // 3. RSI Calculation for overbought/oversold buffer
+  // 2. MACD Momentum Shift
+  const macdCurlingUp = curHist > prevHist && prevHist > mHist[mHist.length - 3] && curHist < 0;
+  const macdCurlingDown = curHist < prevHist && prevHist < mHist[mHist.length - 3] && curHist > 0;
+  
+  // 3. RSI Calculation
   const period = 14;
   let gains = 0, losses = 0;
   for (let i = data.length - period; i < data.length; i++) {
@@ -116,45 +116,53 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   let avgLoss = losses / period;
   let currentRsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
 
+  // 4. Volume Confirmation (Recent spike)
+  let avgVol = 0;
+  for (let i = data.length - 10; i < data.length; i++) avgVol += data[i].volume;
+  avgVol /= 10;
+  const currentVol = data[data.length - 1].volume;
+  const volumeSpike = currentVol > avgVol * 1.2;
+
   // MULTIPLE CONFIRMATION FOR BULLISH (Long Trades)
-  if (uptrend && macdBullish && currentPrice > curEma20) {
-      if (currentRsi > 40 && currentRsi < 70) { // Not overbought yet
+  if (isSuperUptrend && macdCurlingUp && volumeSpike) {
+      if (currentRsi > 40 && currentRsi < 65) { 
           isBullish = true;
-          baseScore += 100;
-          reason += "✅ Major Trend is UP (Price > EMA200, EMA20 > EMA50).\n";
-          reason += "✅ Momentum is BUILDING (MACD extending positively).\n";
-          reason += `✅ RSI is healthy (${currentRsi.toFixed(1)}), room for growth.\n`;
-          reason += "✅ Price holds above short-term support (EMA20).\n";
+          baseScore += 120;
+          reason += "✅ Macro Trend is STRONGLY UP (EMA20 > EMA50 > EMA200).\n";
+          reason += "✅ MACD Histogram curling UP from negative (Momentum shift).\n";
+          reason += `✅ RSI is recovering (${currentRsi.toFixed(1)}).\n`;
+          reason += "✅ Volume spike detected confirming buyers stepping in.\n";
       }
   }
 
   // MULTIPLE CONFIRMATION FOR BEARISH (Short Trades)
-  if (downtrend && macdBearish && currentPrice < curEma20) {
-      if (currentRsi > 30 && currentRsi < 60) { // Not oversold yet
+  if (isSuperDowntrend && macdCurlingDown && volumeSpike) {
+      if (currentRsi > 35 && currentRsi < 60) { 
           isBearish = true;
-          baseScore += 100;
-          reason += "✅ Major Trend is DOWN (Price < EMA200, EMA20 < EMA50).\n";
-          reason += "✅ Momentum is DROPPING (MACD extending negatively).\n";
-          reason += `✅ RSI is healthy (${currentRsi.toFixed(1)}), room for drop.\n`;
-          reason += "✅ Price rejecting off short-term resistance (EMA20).\n";
+          baseScore += 120;
+          reason += "✅ Macro Trend is STRONGLY DOWN (EMA20 < EMA50 < EMA200).\n";
+          reason += "✅ MACD Histogram curling DOWN from positive (Momentum shift).\n";
+          reason += `✅ RSI is breaking down (${currentRsi.toFixed(1)}).\n`;
+          reason += "✅ Volume spike detected confirming sellers stepping in.\n";
       }
   }
 
-  // Mean Reversion fallback if trend isn't heavily established but bands are pinched (For scalping / range bounding)
+  // Bollinger Band Rejection fallback (For tight consolidation breakouts)
   const curUpperBB = bb.upper[bb.upper.length - 1];
   const curLowerBB = bb.lower[bb.lower.length - 1];
   
   if (!isBullish && !isBearish) {
-      if (currentPrice <= curLowerBB && currentRsi < 35 && currentPrice > curEma200) {
+      // Extremely oversold + touching lower BB + bullish engulfing or strong close
+      if (currentPrice <= curLowerBB && currentRsi < 30 && currentPrice > data[data.length-2].high) {
           isBullish = true;
-          baseScore += 80;
-          reason += "✅ Mean Reversion: Strong bounce from Bottom Bollinger Band in a macro UP market.\n";
-          reason += `✅ RSI is OVERSOLD (${currentRsi.toFixed(1)}).\n`;
-      } else if (currentPrice >= curUpperBB && currentRsi > 65 && currentPrice < curEma200) {
+          baseScore += 90;
+          reason += "✅ Mean Reversion: Extreme Oversold (RSI < 30) + Pierced Lower BB.\n";
+          reason += "✅ Bullish Engulfing/Strong close confirmation.\n";
+      } else if (currentPrice >= curUpperBB && currentRsi > 70 && currentPrice < data[data.length-2].low) {
           isBearish = true;
-          baseScore += 80;
-          reason += "✅ Mean Reversion: Strong rejection from Top Bollinger Band in a macro DOWN market.\n";
-          reason += `✅ RSI is OVERBOUGHT (${currentRsi.toFixed(1)}).\n`;
+          baseScore += 90;
+          reason += "✅ Mean Reversion: Extreme Overbought (RSI > 70) + Pierced Upper BB.\n";
+          reason += "✅ Bearish Engulfing/Strong close confirmation.\n";
       }
   }
 
@@ -163,14 +171,11 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   
   let target, stopLoss;
   
-  // Create 1:2 Risk-Reward trades with ATR buffer to avoid stop hunts
+  // Create Highly Probable 1:1.5 Risk-Reward trades
   if (isBullish) {
-      // Stop Loss conservatively below the EMA50 and buffered by ATR, or 2.5 ATR if extremely volatile.
-      stopLoss = Math.min(curEma50 - curAtr, currentPrice - curAtr * 2.5);
-      
+      stopLoss = currentPrice - (curAtr * 1.8); // Tight but safe stop below recent volatility
       const risk = currentPrice - stopLoss;
-      // Target is 2x risk minimum, bounded by Bollinger Bands if possible, but forced 1:2
-      target = currentPrice + risk * 2.5; 
+      target = currentPrice + (risk * 1.5); // 1:1.5 RR maximizes win rate
       
       let recLeverage = Math.floor(Math.max(5, Math.min(20, (baseScore / 100) * 10)));
       const gainPct = (Math.abs(target - currentPrice) / currentPrice * 100).toFixed(2);
@@ -179,7 +184,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             leverage: recLeverage,
             score: baseScore,
             trend: 'bullish',
-            params: { model: 'MultiConf', type: 'MACD+RSI+BB+EMA' },
+            params: { model: 'HighWinRate', type: 'SuperTrend+MACD+BB' },
             waves: null,
             channelPoints: [],
             flagPoints: [],
@@ -189,15 +194,14 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             tradeStyle,
             termStyle,
             gainPct,
-            reasoning: `[${tradeStyle} | BULLISH | MULTI-CONFIRMATION STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET: Target (${parseFloat(target.toFixed(4))}) aligned using a 1:2.5 Risk/Reward profile based on dynamic volatility limits.\n\nSTOP LOSS: Secured below major support zones and buffered using 2.5x ATR to avoid market maker stop hunts.`
+            reasoning: `[${tradeStyle} | BULLISH | HIGH WIN-RATE STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET: Target (${parseFloat(target.toFixed(4))}) set to a highly probable 1:1.5 Risk/Reward profile.\n\nSTOP LOSS: Secured with 1.8x ATR dynamically to prevent stop hunts.`
       };
   }
   
   if (isBearish) {
-      stopLoss = Math.max(curEma50 + curAtr, currentPrice + curAtr * 2.5);
-      
+      stopLoss = currentPrice + (curAtr * 1.8);
       const risk = stopLoss - currentPrice;
-      target = currentPrice - risk * 2.5; 
+      target = currentPrice - (risk * 1.5); 
       
       let recLeverage = Math.floor(Math.max(5, Math.min(20, (baseScore / 100) * 10)));
       const gainPct = (Math.abs(currentPrice - target) / currentPrice * 100).toFixed(2);
@@ -206,7 +210,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             leverage: recLeverage,
             score: baseScore,
             trend: 'bearish',
-            params: { model: 'MultiConf', type: 'MACD+RSI+BB+EMA' },
+            params: { model: 'HighWinRate', type: 'SuperTrend+MACD+BB' },
             waves: null,
             channelPoints: [],
             flagPoints: [],
@@ -216,7 +220,7 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
             tradeStyle,
             termStyle,
             gainPct,
-            reasoning: `[${tradeStyle} | BEARISH | MULTI-CONFIRMATION STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET: Target (${parseFloat(target.toFixed(4))}) aligned using a 1:2.5 Risk/Reward profile based on dynamic volatility limits.\n\nSTOP LOSS: Secured above major resistance zones and buffered using 2.5x ATR to avoid market maker stop hunts.`
+            reasoning: `[${tradeStyle} | BEARISH | HIGH WIN-RATE STRAT] Algorithmic Quantitative Setup.\n\nREASONING:\n${reason}\n\nTARGET: Target (${parseFloat(target.toFixed(4))}) set to a highly probable 1:1.5 Risk/Reward profile.\n\nSTOP LOSS: Secured with 1.8x ATR dynamically to prevent stop hunts.`
       };
   }
 
