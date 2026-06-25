@@ -65,3 +65,69 @@ export function calculateATR(high: number[], low: number[], close: number[], per
     }
     return calculateEMA(tr, period);
 }
+
+export function calculateRSI(data: number[], period: number = 14): number[] {
+    if (data.length <= period) return Array(data.length).fill(50);
+    const rsi = [];
+    let gains = 0, losses = 0;
+    
+    for (let i = 1; i <= period; i++) {
+        const change = data[i] - data[i - 1];
+        if (change > 0) gains += change;
+        else losses -= change;
+    }
+    
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+    const initialRSI = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+    
+    const fullRsi = Array(period).fill(initialRSI);
+    fullRsi.push(initialRSI);
+    
+    for (let i = period + 1; i < data.length; i++) {
+        const change = data[i] - data[i - 1];
+        const gain = change > 0 ? change : 0;
+        const loss = change < 0 ? -change : 0;
+        
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+        
+        if (avgLoss === 0) {
+             fullRsi.push(100);
+        } else {
+             fullRsi.push(100 - (100 / (1 + avgGain / avgLoss)));
+        }
+    }
+    return fullRsi;
+}
+
+export function calculateDEMA(data: number[], period: number): number[] {
+    const e1 = calculateEMA(data, period);
+    const e2 = calculateEMA(e1, period);
+    const dema = [];
+    for (let i = 0; i < data.length; i++) {
+        dema.push(2 * e1[i] - e2[i]);
+    }
+    return dema;
+}
+
+export function calculateStoch(highs: number[], lows: number[], closes: number[], periodK: number = 9, smoothK: number = 3): number[] {
+    const rawK = [];
+    for (let i = 0; i < closes.length; i++) {
+        if (i < periodK - 1) {
+            rawK.push(50);
+        } else {
+            const highSlice = highs.slice(i - periodK + 1, i + 1);
+            const lowSlice = lows.slice(i - periodK + 1, i + 1);
+            const highestHigh = Math.max(...highSlice);
+            const lowestLow = Math.min(...lowSlice);
+            
+            if (highestHigh === lowestLow) {
+                rawK.push(50);
+            } else {
+                rawK.push(((closes[i] - lowestLow) / (highestHigh - lowestLow)) * 100);
+            }
+        }
+    }
+    return calculateSMA(rawK, smoothK);
+}

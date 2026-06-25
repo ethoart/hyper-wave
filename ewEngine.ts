@@ -1,4 +1,4 @@
-import { calculateEMA, calculateSMA, calculateMACD, calculateATR, calculateBollingerBands } from './technicalIndicators.js';
+import { calculateEMA, calculateSMA, calculateMACD, calculateATR, calculateBollingerBands, calculateRSI, calculateStoch, calculateDEMA } from './technicalIndicators.js';
 
 export interface Kline {
   time: number;
@@ -88,116 +88,74 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   const tradeStyle = getTradeStyle(interval);
   const termStyle = ['1m', '3m', '5m', '15m'].includes(interval) ? 'SHORT_TERM' : 'LONG_TERM';
 
+  // SRI Indicator Calculation
+  const sma20 = calculateSMA(closes, 20);
+  const sma200 = calculateSMA(closes, 200);
+  const dema15 = calculateDEMA(closes, 15);
+  const rsi2 = calculateRSI(closes, 2);
+  const stoch = calculateStoch(highs, lows, closes, 9, 3);
+  
+  const bbUpper = bb.upper;
+  const bbLower = bb.lower;
+
+  const lastOpen = data[data.length - 1].open;
+  const prevClose = data[data.length - 2].close;
+  const prevOpen = data[data.length - 2].open;
+  const prev2Close = data[data.length - 3].close;
+  
+  // Strategy 1: SMA 20 (smalc1 / smasc1)
+  const smalc1 = currentPrice > lastOpen && currentPrice > sma20[sma20.length - 1] && 
+                 prevClose > prevOpen && prevClose > sma20[sma20.length - 2] &&
+                 prev2Close < sma20[sma20.length - 3] && currentPrice > sma200[sma200.length - 1];
+
+  const smasc1 = currentPrice < lastOpen && currentPrice < sma20[sma20.length - 1] &&
+                 prevClose < prevOpen && prevClose < sma20[sma20.length - 2] &&
+                 prev2Close > sma20[sma20.length - 3] && currentPrice < sma200[sma200.length - 1];
+
+  // Strategy 2: BB Strategy (shortbb / longbb)
+  const high0 = highs[highs.length - 1];
+  const high1 = highs[highs.length - 2];
+  const low0 = lows[lows.length - 1];
+  const low1 = lows[lows.length - 2];
+  
+  const rsibb0 = rsi2[rsi2.length - 1];
+  const rsibb1 = rsi2[rsi2.length - 2];
+  const rsibb2 = rsi2[rsi2.length - 3];
+  const rsibb3 = rsi2[rsi2.length - 4];
+  
+  const shortbb = lastOpen > currentPrice && currentPrice < dema15[dema15.length - 1] &&
+                  (high0 > bbUpper[bbUpper.length - 1] || high1 > bbUpper[bbUpper.length - 2]) &&
+                  stoch[stoch.length - 2] > 65 &&
+                  (rsibb0 > 91 || rsibb1 > 91 || rsibb2 > 91 || rsibb3 > 91);
+                  
+  const longbb = lastOpen < currentPrice && currentPrice > dema15[dema15.length - 1] &&
+                 (low0 < bbLower[bbLower.length - 1] || low1 < bbLower[bbLower.length - 2]) &&
+                 stoch[stoch.length - 2] < 35 &&
+                 (rsibb0 < 9 || rsibb1 < 9 || rsibb2 < 9 || rsibb3 < 9);
+
   let isBullish = false;
   let isBearish = false;
   let reason = "";
   let baseScore = 0;
 
-  // 1. Strong Macro Trends
-  const macroUptrend = currentPrice > curEma200 && curEma50 > curEma200;
-  const macroDowntrend = currentPrice < curEma200 && curEma50 < curEma200;
+  if (smalc1) {
+      isBullish = true;
+      baseScore += 100;
+      reason += "✅ SRI Indicator: SMA 20 Trend Continuation signal (M) triggered above SMA 200.\n";
+  } else if (longbb) {
+      isBullish = true;
+      baseScore += 120;
+      reason += "✅ SRI Indicator: BB Strategy Long signal (BB) triggered. Oversold Stoch/RSI2 + Bollinger Rejection.\n";
+  }
   
-  // 2. Immediate Momentum (MACD crossing or curling sharply)
-  const macdCurlingUp = curHist > prevHist && prevHist > mHist[mHist.length - 3];
-  const macdCurlingDown = curHist < prevHist && prevHist < mHist[mHist.length - 3];
-  
-  // 3. RSI Calculation for precise pullback targeting
-  const period = 14;
-  let gains = 0, losses = 0;
-  for (let i = data.length - period; i < data.length; i++) {
-      const change = data[i].close - data[i-1].close;
-      if (change > 0) gains += change;
-      else losses -= change;
-  }
-  let avgGain = gains / period;
-  let avgLoss = losses / period;
-  let currentRsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
-
-  // 4. Volume Surge
-  let avgVol = 0;
-  for (let i = data.length - 15; i < data.length; i++) avgVol += data[i].volume;
-  avgVol /= 15;
-  const currentVol = data[data.length - 1].volume;
-  const volumeSpike = currentVol > avgVol * 1.5;
-
-  // 5. Structural Extremes for safe Stoplosss
-  let localLow = currentPrice;
-  let localHigh = currentPrice;
-  for (let i = data.length - 20; i < data.length; i++) {
-     if (data[i].low < localLow) localLow = data[i].low;
-     if (data[i].high > localHigh) localHigh = data[i].high;
-  }
-
-  const lastCandle = data[data.length - 1];
-  const prevCandle = data[data.length - 2];
-  const bullishEngulfing = lastCandle.close > prevCandle.high && lastCandle.open < prevCandle.close;
-  const bearishEngulfing = lastCandle.close < prevCandle.low && lastCandle.open > prevCandle.close;
-
-  // --- GOD MODE STRATEGY A: THE DEEP PULLBACK TREND CONTINUATION --- //
-  // Wait for a strong trend, then a deep pullback to EMA50, and catch the engulfing bounce.
-  if (macroUptrend && currentPrice < curEma20 && currentPrice >= curEma50 * 0.99) {
-      if (bullishEngulfing && macdCurlingUp && volumeSpike && currentRsi < 55) {
-          isBullish = true;
-          baseScore += 150;
-          reason += "💎 GOD MODE: Perfect pullback to EMA50 in a strong Uptrend.\n";
-          reason += "✅ Bullish Engulfing printed with massive volume surge.\n";
-          reason += "✅ MACD confirms momentum shift to the upside.\n";
-      }
-  }
-
-  if (macroDowntrend && currentPrice > curEma20 && currentPrice <= curEma50 * 1.01) {
-      if (bearishEngulfing && macdCurlingDown && volumeSpike && currentRsi > 45) {
-          isBearish = true;
-          baseScore += 150;
-          reason += "💎 GOD MODE: Perfect pullback to EMA50 in a strong Downtrend.\n";
-          reason += "✅ Bearish Engulfing printed with massive volume surge.\n";
-          reason += "✅ MACD confirms momentum shift to the downside.\n";
-      }
-  }
-
-  // --- GOD MODE STRATEGY B: LIQUIDITY SWEEP REVERSALS (Mean Reversion) --- //
-  // When price pierces the Bollinger Band with Extreme RSI, then violently snaps back.
-  const curLowerBB = bb.lower[bb.lower.length - 1];
-  const curUpperBB = bb.upper[bb.upper.length - 1];
-
-  if (!isBullish && !isBearish) {
-      if (prevCandle.low < curLowerBB && lastCandle.close > curLowerBB && currentRsi < 30) {
-          if (bullishEngulfing || lastCandle.close > (lastCandle.high + lastCandle.low)/2 ) {
-              isBullish = true;
-              baseScore += 130;
-              reason += "🗡️ LIQUIDITY SWEEP: Price pierced Lower BB and snapped back inside.\n";
-              reason += `✅ Extreme Oversold RSI (${currentRsi.toFixed(1)}).\n`;
-              reason += "✅ Strong structural bullish close indicating reversal.\n";
-          }
-      }
-      
-      if (prevCandle.high > curUpperBB && lastCandle.close < curUpperBB && currentRsi > 70) {
-           if (bearishEngulfing || lastCandle.close < (lastCandle.high + lastCandle.low)/2 ) {
-              isBearish = true;
-              baseScore += 130;
-              reason += "🗡️ LIQUIDITY SWEEP: Price pierced Upper BB and snapped back inside.\n";
-              reason += `✅ Extreme Overbought RSI (${currentRsi.toFixed(1)}).\n`;
-              reason += "✅ Strong structural bearish close indicating reversal.\n";
-           }
-      }
-  }
-
-  // --- STRATEGY C: PURE MOMENTUM BREAKOUTS --- //
-  if (!isBullish && !isBearish && volumeSpike) {
-       if (macroUptrend && currentPrice > curUpperBB && currentRsi > 60 && currentRsi < 75) {
-           if (macdCurlingUp && lastCandle.close > prevCandle.high) {
-               isBullish = true;
-               baseScore += 110;
-               reason += "🚀 MOMENTUM BREAKOUT: Riding extreme bullish volume expansion.\n";
-           }
-       }
-       if (macroDowntrend && currentPrice < curLowerBB && currentRsi < 40 && currentRsi > 25) {
-           if (macdCurlingDown && lastCandle.close < prevCandle.low) {
-               isBearish = true;
-               baseScore += 110;
-               reason += "🩸 MOMENTUM BREAKDOWN: Riding extreme bearish volume expansion.\n";
-           }
-       }
+  if (smasc1) {
+      isBearish = true;
+      baseScore += 100;
+      reason += "✅ SRI Indicator: SMA 20 Trend Continuation signal (M) triggered below SMA 200.\n";
+  } else if (shortbb) {
+      isBearish = true;
+      baseScore += 120;
+      reason += "✅ SRI Indicator: BB Strategy Short signal (SS) triggered. Overbought Stoch/RSI2 + Bollinger Rejection.\n";
   }
 
   if (isBullish && isBearish) return null;
@@ -205,65 +163,67 @@ export function analyzeElliottWaves(data: Kline[], interval: string = '1d', mlPa
   
   let target, stopLoss;
   
+  // 5. Structural Extremes for safe Stoplosss
+  let localLow = currentPrice;
+  let localHigh = currentPrice;
+  for (let i = data.length - 20; i < data.length; i++) {
+     if (data[i].low < localLow) localLow = data[i].low;
+     if (data[i].high > localHigh) localHigh = data[i].high;
+  }
+  
   if (isBullish) {
-      // WIDE Stop Loss (Avoid stop hunts completely, give it room to breathe)
-      // 5% away from current price safely protects against typical crypto volatility
-      stopLoss = localLow * 0.95; 
-      if (stopLoss >= currentPrice) stopLoss = currentPrice * 0.90; // Absolute safety fallback
+      stopLoss = localLow * 0.98; 
+      if (stopLoss >= currentPrice) stopLoss = currentPrice * 0.95; 
       
-      // TIGHT Aggressive Target for High Win Rate (0.6% ~ 1.2% move)
-      const targetMove = Math.min(Math.max((curAtr / currentPrice) * 1.5, 0.006), 0.015);
+      const targetMove = Math.min(Math.max((curAtr / currentPrice) * 2.0, 0.015), 0.03);
       target = currentPrice * (1 + targetMove);
       
-      // Leverage pushed up for rapid recovery
-      let recLeverage = Math.floor(Math.max(10, Math.min(25, (baseScore / 100) * 15)));
+      let recLeverage = Math.floor(Math.max(5, Math.min(15, (baseScore / 100) * 10)));
       const gainPct = (Math.abs(target - currentPrice) / currentPrice * 100).toFixed(2);
       
       return {
             leverage: recLeverage,
             score: baseScore + 20,
             trend: 'bullish',
-            params: { model: 'RecoveryBot', type: 'HighProbabilityScalp' },
+            params: { model: 'SriCrypto', type: 'SMA20+BBReversal' },
             waves: null,
             channelPoints: [],
             flagPoints: [],
             entry: currentPrice,
             stopLoss: parseFloat(stopLoss.toFixed(4)),
             target: parseFloat(target.toFixed(4)),
-            tradeStyle: "SCALP/RECOVERY",
+            tradeStyle: "SWING/SRI",
             termStyle: "SHORT_TERM",
             gainPct,
-            reasoning: `[✅ HIGH WIN-RATE RECOVERY PROTOCOL DEPLOYED]\n\nREASONING:\n${reason}\n\n🎯 TARGET: (${parseFloat(target.toFixed(4))}). Ultra-conservative tight algorithmic target (+${(targetMove * 100).toFixed(2)}%) designed to guarantee a rapid win and mathematically reconstruct the $1000 loss profile.\n\n🛡️ STOP LOSS: (${parseFloat(stopLoss.toFixed(4))}). Exceptionally wide structural stop placed -5% below the deepest local lows, entirely eliminating the risk of market maker stop hunts.`
+            reasoning: `[✅ SRI INDICATOR PROTOCOL DEPLOYED]\n\nREASONING:\n${reason}\n\n🎯 TARGET: (${parseFloat(target.toFixed(4))}). Target optimized dynamically based on ATR.\n\n🛡️ STOP LOSS: (${parseFloat(stopLoss.toFixed(4))}). Placed below local support to prevent wicks.`
       };
   }
   
   if (isBearish) {
-      // WIDE Stop Loss (Avoid stop hunts completely)
-      stopLoss = localHigh * 1.05;
-      if (stopLoss <= currentPrice) stopLoss = currentPrice * 1.10;
+      stopLoss = localHigh * 1.02;
+      if (stopLoss <= currentPrice) stopLoss = currentPrice * 1.05;
       
-      // TIGHT Aggressive Target
-      const targetMove = Math.min(Math.max((curAtr / currentPrice) * 1.5, 0.006), 0.015);
+      const targetMove = Math.min(Math.max((curAtr / currentPrice) * 2.0, 0.015), 0.03);
       target = currentPrice * (1 - targetMove);
       
-      let recLeverage = Math.floor(Math.max(10, Math.min(25, (baseScore / 100) * 15)));
+      let recLeverage = Math.floor(Math.max(5, Math.min(15, (baseScore / 100) * 10)));
       const gainPct = (Math.abs(currentPrice - target) / currentPrice * 100).toFixed(2);
       
       return {
             leverage: recLeverage,
             score: baseScore + 20,
             trend: 'bearish',
-            params: { model: 'RecoveryBot', type: 'HighProbabilityScalp' },
+            params: { model: 'SriCrypto', type: 'SMA20+BBReversal' },
             waves: null,
             channelPoints: [],
             flagPoints: [],
             entry: currentPrice,
             stopLoss: parseFloat(stopLoss.toFixed(4)),
             target: parseFloat(target.toFixed(4)),
-            tradeStyle: "SCALP/RECOVERY",
+            tradeStyle: "SWING/SRI",
             termStyle: "SHORT_TERM",
             gainPct,
-            reasoning: `[✅ HIGH WIN-RATE RECOVERY PROTOCOL DEPLOYED]\n\nREASONING:\n${reason}\n\n🎯 TARGET: (${parseFloat(target.toFixed(4))}). Ultra-conservative tight algorithmic target (+${(targetMove * 100).toFixed(2)}%) designed to guarantee a rapid win and mathematically reconstruct the $1000 loss profile.\n\n🛡️ STOP LOSS: (${parseFloat(stopLoss.toFixed(4))}). Exceptionally wide structural stop placed +5% above the highest local highs, entirely eliminating the risk of market maker stop hunts.`
+            reasoning: `[✅ SRI INDICATOR PROTOCOL DEPLOYED]\n\nREASONING:\n${reason}\n\n🎯 TARGET: (${parseFloat(target.toFixed(4))}). Target optimized dynamically based on ATR.\n\n🛡️ STOP LOSS: (${parseFloat(stopLoss.toFixed(4))}). Placed above local resistance to prevent wicks.`
       };
   }
 
